@@ -2,7 +2,11 @@ import type { PluginOptions, SessionRateLimit } from 'claude-code'
 
 export type Language = 'en' | 'fr'
 
+// Same default as `userConfig.threshold` in plugin.json.
 export const DEFAULT_THRESHOLD = 300_000
+
+// Below this, a value was most likely typed in thousands (`300` for 300k).
+const MIN_THRESHOLD = 1_000
 
 type Text = { windows: Readonly<Record<string, string | undefined>>; over: string }
 
@@ -13,10 +17,10 @@ const TEXT: Record<Language, Text> = {
 
 const inK = (tokens: number) => `${Math.round(tokens / 1000)}k`
 
-/** The plugin's options, validated: a threshold that is not a positive number falls back to the default. */
+/** The plugin's options, validated: a threshold that is not a number of at least 1000 falls back to the default. */
 export function settings(options: PluginOptions): { threshold: number; language: Language } {
   const threshold = options.threshold
-  const isValid = typeof threshold === 'number' && Number.isFinite(threshold) && threshold > 0
+  const isValid = typeof threshold === 'number' && Number.isFinite(threshold) && threshold >= MIN_THRESHOLD
 
   return {
     threshold: isValid ? threshold : DEFAULT_THRESHOLD,

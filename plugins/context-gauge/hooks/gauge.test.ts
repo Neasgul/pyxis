@@ -18,11 +18,12 @@ function engine(on: On, startTokens: number | undefined) {
     value: { context: { tokens: startTokens, window: 1_000_000 }, rateLimits: LIMITS },
   }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
+  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
 
   return { statuses }
 }
 
-const start = { cwd: '/tmp/project', surface: 'desktop' as const, isInteractive: true }
+const start = { cwd: '/tmp/project', surface: 'terminal' as const, isInteractive: true }
 const measure = (tokens: number) => ({
   context: { tokens, window: 1_000_000 },
   rateLimits: LIMITS,
@@ -53,4 +54,13 @@ test('a language outside en | fr falls back to English', { options: { language: 
   const { statuses } = engine(on, 50_000)
   await $.session.measure(measure(100_000))
   expect(statuses.at(-1)).toBe('ctx 100k / 300k · 5h 34% · 7d 12%')
+})
+
+test('the desktop app attaching after start gets the line too', async ($, on) => {
+  const { statuses } = engine(on, 320_000)
+  await $.session.start({ cwd: '/tmp/project', surface: null, isInteractive: false })
+  const before = statuses.length
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(statuses.length).toBe(before + 1)
+  expect(statuses.at(-1)).toBe('ctx 320k / 300k · 5h 34% · 7d 12% · over threshold')
 })

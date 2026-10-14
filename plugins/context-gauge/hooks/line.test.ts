@@ -29,13 +29,15 @@ test('unknown windows are left out, percentages are rounded', () => {
   expect(statusLine(10_000, limits, 300_000, 'en')).toBe('ctx 10k / 300k · 5h 100%')
 })
 
-test('settings: a threshold that is not a positive number falls back to the default', () => {
+test('settings: a threshold under 1000 or not a number falls back to the default', () => {
   expect(DEFAULT_THRESHOLD).toBe(300_000)
   expect(settings({ threshold: 200_000, language: 'fr' })).toEqual({ threshold: 200_000, language: 'fr' })
   expect(settings({ threshold: 0, language: 'en' }).threshold).toBe(300_000)
   expect(settings({ threshold: -5, language: 'en' }).threshold).toBe(300_000)
   expect(settings({ threshold: Number.NaN, language: 'en' }).threshold).toBe(300_000)
   expect(settings({ threshold: '200000', language: 'en' }).threshold).toBe(300_000)
+  expect(settings({ threshold: 300, language: 'en' }).threshold).toBe(300_000)
+  expect(settings({ threshold: 1_000, language: 'en' }).threshold).toBe(1_000)
   expect(settings({}).language).toBe('en')
   expect(settings({ language: 'de' }).language).toBe('en')
 })
