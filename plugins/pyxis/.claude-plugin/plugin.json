@@ -1,0 +1,28 @@
+{
+  "name": "pyxis",
+  "version": "0.1.0",
+  "description": "A second brain in an Obsidian vault: project hubs, handoffs between sessions, working rules and a vault dashboard.",
+  "author": { "name": "Benoit" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "vault": {
+      "type": "directory",
+      "title": "Vault",
+      "description": "The Obsidian vault's folder.",
+      "required": true
+    },
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "Interface language.",
+      "options": ["en", "fr"],
+      "default": "en"
+    },
+    "threshold": {
+      "type": "number",
+      "title": "Threshold",
+      "description": "Context size, in tokens, from which pyxis asks for a handoff.",
+      "default": 300000
+    }
+  }
+}

@@ -9,6 +9,11 @@
       "name": "context-gauge",
       "source": "./plugins/context-gauge",
       "description": "Context size and usage limits in the status line, with a warning past a threshold."
+    },
+    {
+      "name": "pyxis",
+      "source": "./plugins/pyxis",
+      "description": "A second brain in an Obsidian vault: project hubs, handoffs between sessions, working rules and a vault dashboard."
     }
   ]
 }
