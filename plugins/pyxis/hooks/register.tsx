@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { isWithin, loadKit, logLine, report, settings } from './conventions'
 import type { Kit, Settings } from './conventions'
+import { PANE, isDashboardOpen, openDashboard, refresh, renderDashboard } from './dashboard'
 import { citedHubs, composeHubs, hubsForRoots, loadHubs, repoRoot } from './hubs'
 import { text } from './i18n'
 import { currentMemory, saveMemory } from './memory'
@@ -46,6 +47,9 @@ async function start($: EngineInterface, s: Settings, cwd: string) {
   const isVaultSession = isWithin(cwd, kit.vault)
   const list = await openPassations($, kit, isVaultSession, [...(repo ? [repo] : []), ...own.flatMap(h => h.repos)])
   await update($, passations, () => list)
+  if (isVaultSession) {
+    await openDashboard($, kit)
+  }
 }
 
 /** What the model reads with this message: the start block once, cited hubs, the threshold notice. */
@@ -118,10 +122,26 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'passations', description: t.passationsCommand })
+    await $.command.register({ name: 'vault', description: t.vaultCommand })
     const started = await next(e)
     await start($, s, e.cwd).catch(error => failed($, s, 'session.start', error))
 
     return started
+  })
+
+  // The desktop app attaches after session.start: a pane opened before it is not placed there.
+  on('session.attach', async ($, e, next) => {
+    const attached = await next(e)
+    try {
+      const kit = await loadKit($, s)
+      if (kit.isVaultFound && isWithin(await $.session.cwd(), kit.vault) && !(await isDashboardOpen($))) {
+        await openDashboard($, kit)
+      }
+    } catch (error) {
+      await failed($, s, 'session.attach', error)
+    }
+
+    return attached
   })
 
   on('prompt.submit', async ($, e, next) => {
@@ -156,5 +176,27 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'passations' }, async $ => passationsCommand($, s))
 
+  on('command.run', { command: 'vault' }, async $ => {
+    const kit = await ready($, s, 'command.run')
+    if (kit === null) {
+      return { text: t.vaultMissing(s.vault) }
+    }
+    await openDashboard($, kit)
+
+    return { text: t.dashboardOpened }
+  })
+
+  // A response may have ticked a todo, sorted the inbox or resumed a handoff.
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (e.agentId === undefined && (await isDashboardOpen($))) {
+      await refresh($, await loadKit($, s)).catch(error => failed($, s, 'turn.complete', error))
+    }
+
+    return done
+  })
+
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBanner($, e, s)) ?? next(e))
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => renderDashboard($, e, s))
 }
