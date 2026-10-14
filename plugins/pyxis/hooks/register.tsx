@@ -1,10 +1,18 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import { isWithin, loadKit, logLine, report, settings } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { citedHubs, composeHubs, hubsForRoots, loadHubs, repoRoot } from './hubs'
+import { text } from './i18n'
 import { currentMemory, saveMemory } from './memory'
+import { modelList, openPassations, passationsDir, renderBanner, repoFolder, thresholdNotice } from './passations'
 import { rulesBlock } from './rules'
+
+// The session's values, declared in ../types: they survive a reload of the module.
+const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
+const isBannerHidden = atom({ plugin: 'pyxis', key: 'isBannerHidden' } as const, false)
+const tokens = atom({ plugin: 'pyxis', key: 'tokens' } as const, null)
 
 const union = (a: string[], b: string[]) => [...new Set([...a, ...b])]
 
@@ -22,7 +30,25 @@ async function ready($: EngineInterface, s: Settings, where: string): Promise<Ki
   return kit.isVaultFound ? kit : null
 }
 
-/** What the model reads with this message: the start block once, then the hubs cited. */
+/** At start: the hubs of the session's repository become active, the banner lists their handoffs. */
+async function start($: EngineInterface, s: Settings, cwd: string) {
+  const kit = await ready($, s, 'session.start')
+  if (kit === null) {
+    return
+  }
+  const repo = await repoRoot($, cwd)
+  const { hubs, problems } = await loadHubs($, kit)
+  await report($, kit, 'hubs', problems, false)
+  const own = hubsForRoots(hubs, repo ? [cwd, repo] : [cwd])
+  const memory = await currentMemory($)
+  await saveMemory($, { ...memory, active: union(memory.active, own.map(h => h.name)) })
+
+  const isVaultSession = isWithin(cwd, kit.vault)
+  const list = await openPassations($, kit, isVaultSession, [...(repo ? [repo] : []), ...own.flatMap(h => h.repos)])
+  await update($, passations, () => list)
+}
+
+/** What the model reads with this message: the start block once, cited hubs, the threshold notice. */
 async function contextFor($: EngineInterface, s: Settings, message: string): Promise<string[]> {
   const kit = await ready($, s, 'prompt.submit')
   if (kit === null) {
@@ -48,29 +74,73 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
   if (composed.text) {
     blocks.push(composed.text)
   }
+  if (!memory.isPrimed) {
+    const repos = hubs.filter(h => active.includes(h.name)).flatMap(h => h.repos)
+    const list = await openPassations($, kit, isVaultSession, [...(repo ? [repo] : []), ...repos])
+    if (list.length > 0) {
+      blocks.push(modelList(list, kit, await $.clock.now()))
+    }
+  }
+  const size = await read($, tokens)
+  const dir = passationsDir(kit, repo)
+  if (size !== null && size >= kit.threshold && dir !== null) {
+    blocks.push(thresholdNotice(size, kit.threshold, dir, memory.id, $.plugin.root))
+  }
 
   await saveMemory($, { ...memory, isPrimed: true, served: union(memory.served, composed.served), active })
 
   return blocks
 }
 
+/** `/passations`: the banner again, over `outsideRepo`, the session's repository and the active hubs. */
+async function passationsCommand($: EngineInterface, s: Settings): Promise<{ text: string }> {
+  const t = text(s.language)
+  const kit = await ready($, s, 'command.run')
+  if (kit === null) {
+    return { text: t.vaultMissing(s.vault) }
+  }
+  const memory = await currentMemory($)
+  const active = (await loadHubs($, kit)).hubs.filter(h => memory.active.includes(h.name))
+  const repo = await repoRoot($, await $.session.cwd())
+  const list = await openPassations($, kit, true, [...(repo ? [repo] : []), ...active.flatMap(h => h.repos)])
+  await update($, passations, () => list)
+  await update($, isBannerHidden, () => false)
+  // The session's repository is named only when no active hub covers it.
+  const isRepoNamed = repo !== undefined && !active.some(h => h.repos.includes(repo))
+  const scope = [t.outsideRepo, ...active.map(h => h.name), ...(isRepoNamed ? [repoFolder(repo)] : [])].join(', ')
+
+  return { text: list.length === 0 ? t.nonePassations(scope) : t.somePassations(list.length, scope) }
+}
+
 export const register: Register = (on, options) => {
   const s = settings(options)
+  const t = text(s.language)
 
   on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'passations', description: t.passationsCommand })
     const started = await next(e)
-    await ready($, s, 'session.start').catch(error => failed($, s, 'session.start', error))
+    await start($, s, e.cwd).catch(error => failed($, s, 'session.start', error))
 
     return started
   })
 
   on('prompt.submit', async ($, e, next) => {
+    // The banner is for the start: the first message hides it, `/passations` shows it again.
+    if (!e.text.trimStart().startsWith('/passations') && !(await read($, isBannerHidden))) {
+      await update($, isBannerHidden, () => true)
+    }
     const context = await contextFor($, s, e.text).catch(async error => {
       await failed($, s, 'prompt.submit', error)
       return []
     })
 
     return next(context.length > 0 ? { ...e, context: [...(e.context ?? []), ...context] } : e)
+  })
+
+  on('session.measure', async ($, e, next) => {
+    await update($, tokens, () => e.context.tokens ?? null)
+
+    return next(e)
   })
 
   // After a compaction the context holds neither the start block nor the hubs: both go again.
@@ -83,4 +153,8 @@ export const register: Register = (on, options) => {
 
     return compacted
   })
+
+  on('command.run', { command: 'passations' }, async $ => passationsCommand($, s))
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBanner($, e, s)) ?? next(e))
 }
