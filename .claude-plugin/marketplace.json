@@ -1,0 +1,14 @@
+{
+  "name": "pyxis",
+  "owner": {
+    "name": "Benoit"
+  },
+  "description": "Claude Code plugins for a second brain kept in an Obsidian vault.",
+  "plugins": [
+    {
+      "name": "context-gauge",
+      "source": "./plugins/context-gauge",
+      "description": "Context size and usage limits in the status line, with a warning past a threshold."
+    }
+  ]
+}

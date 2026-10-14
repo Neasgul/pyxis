@@ -1,0 +1,21 @@
+{
+  "name": "context-gauge",
+  "version": "0.1.0",
+  "description": "Context size and usage limits in the status line, with a warning past a threshold.",
+  "author": { "name": "Benoit" },
+  "userConfig": {
+    "threshold": {
+      "type": "number",
+      "title": "Threshold",
+      "description": "Context size, in tokens, from which the status line warns.",
+      "default": 300000
+    },
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "Interface language.",
+      "options": ["en", "fr"],
+      "default": "en"
+    }
+  }
+}
