@@ -5,7 +5,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { Passation } from '../types'
-import { folder, isWithin, loadKit } from './conventions'
+import { folder, isWithin, loadKit, logLine } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { bareField, field, markDone } from './frontmatter'
 import { repoRoot } from './hubs'
@@ -17,6 +17,22 @@ const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
 const isBannerHidden = atom({ plugin: 'pyxis', key: 'isBannerHidden' } as const, false)
 const tokens = atom({ plugin: 'pyxis', key: 'tokens' } as const, null)
 const isThresholdHidden = atom({ plugin: 'pyxis', key: 'isThresholdHidden' } as const, false)
+
+/** The context size last measured in this session; null before a measurement, after a `/clear` or an unsized compaction. */
+export async function contextSize($: EngineInterface): Promise<number | null> {
+  const measured = await read($, tokens)
+
+  return measured !== null && measured.id === (await $.session.id()) ? measured.size : null
+}
+
+/** Keeps a measurement (null: unknown). Below the threshold, a hidden warning is armed for the next crossing. */
+export async function recordSize($: EngineInterface, size: number | null, threshold: number) {
+  const id = await $.session.id()
+  await update($, tokens, () => (size === null ? null : { id, size }))
+  if ((size === null || size < threshold) && (await read($, isThresholdHidden))) {
+    await update($, isThresholdHidden, () => false)
+  }
+}
 
 /** At most this many handoffs are listed for the model. */
 const MODEL_LIST = 10
@@ -109,7 +125,6 @@ export async function openPassations(
 
 /** Marks the note done, moves it to `resumed`, then submits the prompt that resumes it. */
 async function resume($: EngineInterface, s: Settings, p: Passation) {
-  await update($, isBannerHidden, () => true)
   const kit = await loadKit($, s)
   const t = text(s.language)
   const dir = `${folder(kit, 'passations')}/${p.folder}`
@@ -119,7 +134,16 @@ async function resume($: EngineInterface, s: Settings, p: Passation) {
     ? `${resumedDir}/${p.name}-${await $.clock.now()}.md`
     : `${resumedDir}/${p.file}`
 
-  await $.fs.write(source, markDone(await $.fs.read(source)))
+  try {
+    await $.fs.write(source, markDone(await $.fs.read(source)))
+  } catch (error) {
+    // Moved or deleted since the banner listed it: say so, and leave the banner up.
+    const message = error instanceof Error ? error.message : String(error)
+    $.ui.toast(t.resumeFailed(p.file, message))
+    await logLine($, kit, 'resume', message)
+    return
+  }
+  await update($, isBannerHidden, () => true)
   await $.process.run(['mkdir', '-p', resumedDir])
   const moved = await $.process.run(['mv', source, target])
 
@@ -143,7 +167,7 @@ export async function renderBanner(
   e: RenderInput<'AbovePrompt'>,
   s: Settings,
 ): Promise<RenderElement | undefined> {
-  const size = await read($, tokens)
+  const size = await contextSize($)
   const isOver = size !== null && size >= s.threshold && !(await read($, isThresholdHidden))
   const list = (await read($, isBannerHidden)) ? [] : await read($, passations)
   if (e.props.hasSurvey || (!isOver && list.length === 0)) {

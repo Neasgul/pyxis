@@ -6,6 +6,7 @@ import type { Language } from './i18n'
 
 // The session's values, declared in ../types: they survive a reload of the module.
 const reported = atom({ plugin: 'pyxis', key: 'reported' } as const, [])
+const toasted = atom({ plugin: 'pyxis', key: 'toasted' } as const, [])
 
 export type Role = 'inbox' | 'hubs' | 'archive' | 'daily' | 'templates' | 'sessions' | 'logs'
 
@@ -157,6 +158,22 @@ export function folder(kit: Kit, role: Role | 'passations'): string | null {
   return relative === null ? null : `${kit.vault}/${relative}`
 }
 
+/** Folders read, never written by pyxis: absent from disk, the model is not told of them. */
+const READ_ONLY: readonly Role[] = ['inbox', 'hubs', 'archive', 'daily', 'templates']
+
+/** The kit with the read-only folders absent from disk turned off; sessions and logs are made on first write. */
+export async function onDisk($: EngineInterface, kit: Kit): Promise<Kit> {
+  const folders = { ...kit.folders }
+  for (const role of READ_ONLY) {
+    const path = folder(kit, role)
+    if (path !== null && (await $.fs.stat(path).catch(() => null))?.kind !== 'dir') {
+      folders[role] = null
+    }
+  }
+
+  return { ...kit, folders }
+}
+
 /** Reads the options, the vault and its conventions file. Never rejects. */
 export async function loadKit($: EngineInterface, s: Settings): Promise<Kit> {
   const home = (await $.env.get('HOME').catch(() => undefined)) ?? ''
@@ -192,18 +209,26 @@ export async function logLine($: EngineInterface, kit: Kit, where: string, messa
   await $.fs.write(path, `${before}${at}\t${where}\t${message.replace(/\s+/g, ' ')}\n`).catch(() => undefined)
 }
 
-/** Logs each message once per session, and shows it as a toast when asked. */
+/** Logs each message once per session; when asked, shows the ones not yet seen in one toast. */
 export async function report($: EngineInterface, kit: Kit, where: string, messages: string[], isToasted: boolean) {
-  const known = await read($, reported)
-  const fresh = [...new Set(messages)].filter(m => !known.includes(m))
-  if (fresh.length === 0) {
+  const unique = [...new Set(messages)]
+  const logged = await read($, reported)
+  const fresh = unique.filter(m => !logged.includes(m))
+  if (fresh.length > 0) {
+    await update($, reported, before => [...before, ...fresh])
+    for (const message of fresh) {
+      await logLine($, kit, where, message)
+    }
+  }
+  if (!isToasted) {
     return
   }
-  await update($, reported, before => [...before, ...fresh])
-  for (const message of fresh) {
-    if (isToasted) {
-      $.ui.toast(message)
-    }
-    await logLine($, kit, where, message)
+  const shown = await read($, toasted)
+  const unseen = unique.filter(m => !shown.includes(m))
+  // The desktop app attaches after session.start: until a surface does, a toast has nowhere to show.
+  if (unseen.length === 0 || (await $.session.surfaces()).length === 0) {
+    return
   }
+  await update($, toasted, before => [...before, ...unseen])
+  $.ui.toast(unseen.join('\n'))
 }

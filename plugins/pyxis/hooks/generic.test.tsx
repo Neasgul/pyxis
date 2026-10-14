@@ -16,6 +16,8 @@ const NOTES: Notes = {
   [`${VAULT}/.claude/pyxis.json`]: JSON.stringify(CONVENTIONS),
   [`${VAULT}/Features/Onboarding/onboarding.md`]: '---\nstatus: active\ntriggers: [inscription]\n---\n\n## But\n\nParcours d’inscription. #a-verifier\n- [ ] Relire les écrans\n',
   [`${VAULT}/A-trier/idee.md`]: 'Une idée #a-verifier\n',
+  [`${VAULT}/Archives/`]: '',
+  [`${VAULT}/Modeles/`]: '',
   [`${VAULT}/Daily/2026-10-01.md`]: '- [ ] not hers: daily is off\n',
   [`${VAULT}/IA/passations/no-repo/maquettes.md`]: ['---\nstatus: active\ndescription: Maquettes de l’onboarding.\n---\n', 2],
 }

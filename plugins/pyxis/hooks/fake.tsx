@@ -1,6 +1,6 @@
 // The engine under pyxis in tests: a vault and repositories in memory, what the plugin runs,
 // submits and shows, recorded. Imported by the tests only.
-import type { FsEntry, On } from 'claude-code'
+import type { FsEntry, On, RenderSurface } from 'claude-code'
 
 export const NOW = Date.UTC(2026, 9, 13, 10)
 export const DAY = 86_400_000
@@ -17,6 +17,10 @@ export type Fake = {
   toasts: string[]
   panes: string[]
   session: { cwd: string; id: string }
+  /** The surfaces attached: the one the session started on, then each that attached. */
+  surfaces: RenderSurface[]
+  /** What the next compaction reports as the conversation's size afterwards. */
+  tokensAfter?: number
 }
 
 /** `[text, days ago]` for an older note. */
@@ -38,7 +42,15 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
       typeof v === 'string' ? [path, { text: v, mtimeMs: NOW }] : [path, { text: v[0], mtimeMs: NOW - v[1] * DAY }],
     ),
   )
-  const fake: Fake = { files, commands: [], prompts: [], toasts: [], panes: [], session: { cwd: VAULT, id: 'S1' } }
+  const fake: Fake = {
+    files,
+    commands: [],
+    prompts: [],
+    toasts: [],
+    panes: [],
+    session: { cwd: VAULT, id: 'S1' },
+    surfaces: [],
+  }
   const isDir = (path: string) => [...files.keys()].some(k => k.startsWith(`${path}/`))
   const entries = (path: string): FsEntry[] => {
     const found = new Map<string, FsEntry>()
@@ -76,13 +88,22 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
 
   on('session.start', (_$, e) => {
     fake.session.cwd = e.cwd
+    fake.surfaces = e.surface === null ? [] : [e.surface]
     return { cwd: e.cwd }
   })
+  on('session.surfaces', () => ({ value: fake.surfaces }))
   on('session.cwd', () => ({ value: fake.session.cwd }))
   on('session.id', () => ({ value: fake.session.id }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
-  on('session.compact', (_$, e) => ({ messages: e.messages }))
-  on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('session.compact', (_$, e) =>
+    fake.tokensAfter === undefined ? { messages: e.messages } : { messages: e.messages, tokensAfter: fake.tokensAfter },
+  )
+  on('session.attach', (_$, e) => {
+    if (!fake.surfaces.includes(e.surface)) {
+      fake.surfaces.push(e.surface)
+    }
+    return { clientId: e.clientId }
+  })
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('clock.now', () => ({ value: NOW }))

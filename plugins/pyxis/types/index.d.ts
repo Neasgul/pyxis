@@ -56,14 +56,16 @@ export type Dashboard = {
 declare module 'claude-code' {
   interface PluginState {
     pyxis: {
-      /** Messages already logged or shown this session. */
+      /** Messages already logged this session. */
       reported: string[]
+      /** Messages already shown in a toast this session. */
+      toasted: string[]
       session: SessionMemory | null
       /** The banner's handoffs. */
       passations: Passation[]
       isBannerHidden: boolean
-      /** Context size at the last measurement. */
-      tokens: number | null
+      /** Context size at the last measurement, and the session it was measured in: a `/clear` makes it stale. */
+      tokens: { id: string; size: number } | null
       isThresholdHidden: boolean
       dashboard: Dashboard | null
     }

@@ -1,21 +1,32 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { isWithin, loadKit, logLine, report, settings } from './conventions'
+import { isWithin, loadKit, logLine, onDisk, report, settings } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { PANE, isDashboardOpen, openDashboard, refresh, renderDashboard } from './dashboard'
 import { citedHubs, composeHubs, hubsForRoots, loadHubs, repoRoot } from './hubs'
 import { text } from './i18n'
 import { currentMemory, saveMemory } from './memory'
-import { modelList, openPassations, passationsDir, renderBanner, repoFolder, thresholdNotice } from './passations'
+import {
+  contextSize,
+  modelList,
+  openPassations,
+  passationsDir,
+  recordSize,
+  renderBanner,
+  repoFolder,
+  thresholdNotice,
+} from './passations'
 import { rulesBlock } from './rules'
 
 // The session's values, declared in ../types: they survive a reload of the module.
 const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
 const isBannerHidden = atom({ plugin: 'pyxis', key: 'isBannerHidden' } as const, false)
-const tokens = atom({ plugin: 'pyxis', key: 'tokens' } as const, null)
 
 const union = (a: string[], b: string[]) => [...new Set([...a, ...b])]
+
+/** pyxis's own commands answer without the model: what goes with a message waits for the next. */
+const isOwnCommand = (prompt: string) => /^\/(passations|vault)(\s|$)/.test(prompt.trimStart())
 
 /** A hook never blocks a message: what fails goes to the error log. */
 async function failed($: EngineInterface, s: Settings, where: string, error: unknown) {
@@ -73,7 +84,7 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
   const blocks: string[] = []
 
   if (!memory.isPrimed) {
-    blocks.push(rulesBlock(kit, isVaultSession, memory.id, $.plugin.root))
+    blocks.push(rulesBlock(await onDisk($, kit), isVaultSession, memory.id, $.plugin.root))
   }
   if (composed.text) {
     blocks.push(composed.text)
@@ -85,7 +96,7 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
       blocks.push(modelList(list, kit, await $.clock.now()))
     }
   }
-  const size = await read($, tokens)
+  const size = await contextSize($)
   const dir = passationsDir(kit, repo)
   if (size !== null && size >= kit.threshold && dir !== null) {
     blocks.push(thresholdNotice(size, kit.threshold, dir, memory.id, $.plugin.root))
@@ -129,24 +140,21 @@ export const register: Register = (on, options) => {
     return started
   })
 
-  // The desktop app attaches after session.start: a pane opened before it is not placed there.
+  // The desktop app attaches after session.start: a problem found before it is told now.
+  // A pane opened at start is the engine's to place; one the person closed stays closed.
   on('session.attach', async ($, e, next) => {
     const attached = await next(e)
-    try {
-      const kit = await loadKit($, s)
-      if (kit.isVaultFound && isWithin(await $.session.cwd(), kit.vault) && !(await isDashboardOpen($))) {
-        await openDashboard($, kit)
-      }
-    } catch (error) {
-      await failed($, s, 'session.attach', error)
-    }
+    await ready($, s, 'session.attach').catch(error => failed($, s, 'session.attach', error))
 
     return attached
   })
 
   on('prompt.submit', async ($, e, next) => {
+    if (isOwnCommand(e.text)) {
+      return next(e)
+    }
     // The banner is for the start: the first message hides it, `/passations` shows it again.
-    if (!e.text.trimStart().startsWith('/passations') && !(await read($, isBannerHidden))) {
+    if (!(await read($, isBannerHidden))) {
       await update($, isBannerHidden, () => true)
     }
     const context = await contextFor($, s, e.text).catch(async error => {
@@ -158,17 +166,19 @@ export const register: Register = (on, options) => {
   })
 
   on('session.measure', async ($, e, next) => {
-    await update($, tokens, () => e.context.tokens ?? null)
+    await recordSize($, e.context.tokens ?? null, s.threshold)
 
     return next(e)
   })
 
-  // After a compaction the context holds neither the start block nor the hubs: both go again.
+  // After a compaction the context holds neither the start block nor the hubs: both go again,
+  // and the size is the compacted one until the next measurement.
   on('session.compact', async ($, e, next) => {
     const compacted = await next(e)
     if (e.agentId === undefined && e.trigger !== 'precompute' && !('skip' in compacted && compacted.skip)) {
       const memory = await currentMemory($)
       await saveMemory($, { ...memory, isPrimed: false, served: [] })
+      await recordSize($, 'tokensAfter' in compacted ? (compacted.tokensAfter ?? null) : null, s.threshold)
     }
 
     return compacted

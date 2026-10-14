@@ -76,3 +76,29 @@ test('outside the vault: the block without the working rules', OPTIONS, async ($
   await $.prompt.submit({ text: 'one' })
   expect(fake.prompts[0]?.context[0]).not.toContain('Working rules')
 })
+
+test('folders absent from disk: the block says nothing of them', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/Inbox/a.md`]: 'x' })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'one' })
+
+  const block = fake.prompts[0]?.context[0] ?? ''
+  expect(block).toContain('inbox `Inbox`')
+  for (const absent of ['hubs `Projects`', 'archive `Archive`', 'daily `Daily`', 'templates `Templates`']) {
+    expect(block).not.toContain(absent)
+  }
+  expect(block).not.toContain('Each project has a hub')
+  expect(block).not.toContain('may inform your questions')
+  expect(block).toContain('3. Never delete a note: ask.')
+})
+
+test('/passations or /vault typed first: the block waits for the next message', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/Inbox/a.md`]: 'x' })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: '/passations' })
+  await $.prompt.submit({ text: '/vault' })
+  await $.prompt.submit({ text: 'bonjour' })
+
+  const blocks = fake.prompts.map(p => p.context.filter(c => c.startsWith('pyxis: ')).length)
+  expect(blocks).toEqual([0, 0, 1])
+})

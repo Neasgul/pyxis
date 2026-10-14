@@ -114,10 +114,18 @@ test('a folder missing from disk hides its section', OPTIONS, async ($, on) => {
   expect(await ui.find({ type: 'Text', text: 'À vérifier · 3 #todo/verify' })).toBeDefined()
 })
 
-test('the desktop app attaching after start gets the pane', OPTIONS, async ($, on) => {
+test('the desktop app attaching after start: the pane opened at start, once', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES)
   await $.session.start({ cwd: VAULT, surface: null, isInteractive: false })
-  fake.panes.length = 0
+  expect(fake.panes).toEqual(['pyxis-vault'])
   await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
   expect(fake.panes).toEqual(['pyxis-vault'])
+})
+
+test('a pane closed by hand stays closed when a surface attaches', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES)
+  await $.session.start(startIn(VAULT))
+  fake.panes.length = 0
+  await $.session.attach({ surface: 'mobile', clientId: 'mobile:phone' })
+  expect(fake.panes).toEqual([])
 })

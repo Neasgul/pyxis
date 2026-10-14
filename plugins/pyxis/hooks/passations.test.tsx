@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { BAND, HOME, VAULT, fakeEngine, lastContext, measured, startIn } from './fake'
+import { BAND, COMPACT, HOME, VAULT, fakeEngine, lastContext, measured, startIn } from './fake'
 import type { Notes } from './fake'
 import { hubsForRoots } from './hubs'
 
@@ -244,4 +244,61 @@ test('a lower threshold, in English', { options: { vault: VAULT, threshold: 200_
 
   const ui = await banner($)
   expect((await ui.find({ type: 'Text', text: /210k/ }))?.text).toBe('Context at 210k, past the handoff threshold (200k).')
+})
+
+test('a new session id (/clear) forgets the last size: no notice, no warning', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  await $.prompt.submit({ text: 'bonjour' })
+  await $.session.measure(measured(320_000))
+  fake.session.id = 'S2'
+  await $.prompt.submit({ text: 'nouvelle conversation' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+  expect(await (await banner($)).find({ key: 'write-passation' })).toBeUndefined()
+})
+
+test('after a compaction, the size is the compacted one, or unknown', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  await $.prompt.submit({ text: 'bonjour' })
+  await $.session.measure(measured(320_000))
+  fake.tokensAfter = 40_000
+  await $.session.compact(COMPACT)
+  await $.prompt.submit({ text: 'suite' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+  expect(await (await banner($)).find({ key: 'write-passation' })).toBeUndefined()
+
+  fake.tokensAfter = undefined
+  await $.session.measure(measured(320_000))
+  await $.session.compact(COMPACT)
+  await $.prompt.submit({ text: 'encore' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+})
+
+test('hidden, the warning comes back at the next crossing', OPTIONS, async ($, on) => {
+  fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(`${HOME}/Downloads`))
+  await $.session.measure(measured(310_000))
+  const ui = await banner($)
+  await ui.press({ key: 'hide-threshold' })
+  expect(await ui.find({ key: 'write-passation' })).toBeUndefined()
+
+  await $.session.measure(measured(120_000))
+  await $.session.measure(measured(305_000))
+  expect(await ui.find({ key: 'write-passation' })).toBeDefined()
+})
+
+test('Resume on a handoff gone from disk: a toast and a log line, the banner stays', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  const ui = await banner($)
+  fake.files.delete(`${PASSATIONS}/Android_App_Sample/maquettes-v2.md`)
+  const before = fake.prompts.length
+  await ui.press({ key: 'resume:Android_App_Sample/maquettes-v2.md' })
+
+  expect(fake.prompts).toHaveLength(before)
+  expect(fake.toasts).toHaveLength(1)
+  expect(fake.toasts[0]).toContain('maquettes-v2.md')
+  expect(fake.files.get(`${VAULT}/AI/logs/pyxis-errors.log`)?.text).toContain('\tresume\t')
+  expect(await ui.find({ key: 'resume:Android_App_Sample/maquettes-v2.md' })).toBeDefined()
 })

@@ -92,3 +92,26 @@ test('French: the toasts too', { options: { vault: VAULT, language: 'fr' } }, as
 
   expect(fake.toasts).toEqual(['pyxis : .claude/pyxis.json : JSON ignoré, valeur par défaut.'])
 })
+
+test('several problems: one toast, one log line each', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/.claude/pyxis.json`]: '{ "floders": {}, "folders": { "inbox": 3 } }' })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'hello' })
+
+  expect(fake.toasts).toHaveLength(1)
+  expect(fake.toasts[0]).toContain('floders ignored')
+  expect(fake.toasts[0]).toContain('folders.inbox ignored')
+  const log = fake.files.get(`${VAULT}/AI/logs/pyxis-errors.log`)?.text ?? ''
+  expect(log.trim().split('\n')).toHaveLength(2)
+})
+
+test('the desktop app: a problem found before it attaches is shown once it does', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, {})
+  await $.session.start({ cwd: HOME, surface: null, isInteractive: false })
+  expect(fake.toasts).toEqual([])
+
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  await $.prompt.submit({ text: 'hello' })
+  expect(fake.toasts).toHaveLength(1)
+  expect(fake.toasts[0]).toContain(`vault folder not found (${VAULT})`)
+})
