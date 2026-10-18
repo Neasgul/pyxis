@@ -47,7 +47,7 @@ written twice (one place, link from the others).
 | Word that should have brought a hub | that hub's `triggers:` |
 | Rule for this vault | the vault's CLAUDE.md |
 | Rule for every project | the user's global CLAUDE.md |
-| Uncertain fact | written with the verify tag |
+| Uncertain fact | written with the verify tag the block names (if none, in plain words) |
 | Raw, not yet sorted | the inbox folder |
 
 A settled decision gets a note as `/pyxis:decision` describes: read
@@ -71,8 +71,8 @@ change in how we work**. Write nothing before I approve.
 
 ## 5. Apply
 
-Write what I approved and nothing else, following the working rules pyxis
-gave this session. Then write the session summary in the sessions folder, creating the
+Write what I approved and nothing else, following the vault's working rules
+(from pyxis's rules block, or the vault's CLAUDE.md). Then write the session summary in the sessions folder, creating the
 folder if it is absent, as `<today>-<topic-slug>.md`. If the block names a template, follow it
 and fill its placeholders; never edit the template. Otherwise:
 

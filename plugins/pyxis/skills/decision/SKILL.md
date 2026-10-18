@@ -75,7 +75,8 @@ redirect you. Append only — don't reorder or restyle the hub.
 ## Don't
 
 - Don't invent the rationale. If you don't know why something was rejected,
-  ask instead of reconstructing it. Anything you inferred gets the verify tag.
+  ask instead of reconstructing it. Anything you inferred gets the verify tag the block names (if it says none, say what
+  you are unsure of in plain words).
 - Don't write a decision note for something still under discussion. If it
   isn't settled, say so and stop.
 - Don't touch another project's hub.

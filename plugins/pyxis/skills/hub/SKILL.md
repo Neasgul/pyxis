@@ -82,7 +82,8 @@ and nothing there gets linked as though it were current.
 
 ## Anything you're unsure of
 
-Write it with the verify tag instead of asserting it. That covers anything
+Write it with the verify tag the block names (if it says none, say what you are unsure of
+in plain words) instead of asserting it. That covers anything
 you inferred from a repo name, a branch, or the vault's CLAUDE.md
 rather than heard from me.
 

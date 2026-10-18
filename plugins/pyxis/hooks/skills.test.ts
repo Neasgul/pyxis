@@ -29,6 +29,8 @@ const FACTS: SkillFacts = {
   today: '2026-10-13',
   weekday: 'Tuesday',
   sessionId: 'S1',
+  verifyTag: '#todo/verify',
+  isVaultSession: true,
   folders: [
     { role: 'inbox', path: 'Inbox' },
     { role: 'hubs', path: 'Projects' },
@@ -61,6 +63,7 @@ test('factsBlock: the text the skills rely on', () => {
     [
       'pyxis, for `/pyxis:daily`: vault `/home/ada/vault`, today Tuesday 2026-10-13, session id `S1`.',
       'Folders, relative to the vault: inbox `Inbox`, hubs `Projects`, archive `Archive`, daily `Daily`, templates `Templates`, sessions `AI/sessions`, logs `AI/logs`, passations `AI/passations`.',
+      'Verify tag: `#todo/verify`.',
       'Template: `Templates/daily.md`, follow it.',
       'Previous daily note:',
       '- `Daily/2026-10-12.md`',
@@ -200,6 +203,7 @@ test('an empty vault: every list says none', OPTIONS, async ($, on) => {
     [
       'pyxis, for `/pyxis:morning`: vault `/home/ada/vault`, today Tuesday 2026-10-13, session id `S1`.',
       'Folders, relative to the vault: inbox `Inbox`, daily `Daily`, sessions `AI/sessions`, logs `AI/logs`, passations `AI/passations`.',
+      'Verify tag: `#todo/verify`.',
       "Template: none: use the skill's default format.",
       "Today's daily note:",
       '- `Daily/2026-10-13.md` (absent)',
@@ -217,6 +221,29 @@ test('an empty vault: every list says none', OPTIONS, async ($, on) => {
       '- none',
     ].join('\n'),
   )
+})
+
+test('a skill typed from a repository outside the vault: the vault’s CLAUDE.md is named', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES, {}, GIT)
+  await $.session.start(startIn(`${HOME}/code/parcels`))
+  await $.prompt.submit({ text: '/pyxis:decision we keep otters' })
+
+  const block = facts(fake)
+  expect(block).toContain('Verify tag: `#todo/verify`.')
+  expect(block).toContain('This session is outside the vault: read `/home/ada/vault/CLAUDE.md` before writing a note.')
+
+  await $.session.start(startIn(`${V}/Projects`))
+  await $.prompt.submit({ text: '/pyxis:decision we keep otters' })
+  expect(facts(fake)).not.toContain('outside the vault')
+})
+
+test('verifyTag turned off in pyxis.json: the block says none', OPTIONS, async ($, on) => {
+  const notes: Notes = { ...NOTES, [`${V}/.claude/pyxis.json`]: JSON.stringify({ verifyTag: null }) }
+  const fake = fakeEngine(on, notes, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:daily' })
+
+  expect(facts(fake)).toContain('Verify tag: none.')
+  expect(facts(fake)).not.toContain('Verify tag: `')
 })
 
 test('the block goes with each pyxis skill, not with a lookalike', OPTIONS, async ($, on) => {

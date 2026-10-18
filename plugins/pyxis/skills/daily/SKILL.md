@@ -44,6 +44,6 @@ Git activity today: !`git log --since=midnight --oneline --all 2>/dev/null | hea
    previous note, there is nothing to carry over: say so in one line.
 3. Read the `Session notes of today`. Summarize each in one bullet under `## Done`, linking
    the session note.
-4. Under `## Open`, list anything tagged with the verify tag of the vault's conventions
-   (the rules block names it), if any, created today.
+4. Under `## Open`, list anything tagged with the verify tag the block names, created today
+   (if the block says none, skip this step).
 5. Stop. Do not invent accomplishments. If the day is empty, say so in one line.

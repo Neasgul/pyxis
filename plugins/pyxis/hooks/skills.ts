@@ -3,7 +3,7 @@
 // this text, so it is fixed: change a line here and the SKILL.md files that name it with it.
 import type { EngineInterface } from 'claude-code'
 
-import { ROLES, folder, onDisk } from './conventions'
+import { ROLES, folder, isWithin, onDisk } from './conventions'
 import type { Kit, Role } from './conventions'
 import { collect, errorLogs } from './dashboard'
 import { listField } from './frontmatter'
@@ -25,6 +25,10 @@ export type SkillFacts = {
   /** `Tuesday`. */
   weekday: string
   sessionId: string
+  /** The tag for what the model is unsure of; null: the vault turns it off. */
+  verifyTag: string | null
+  /** The session started inside the vault, where its CLAUDE.md is loaded. */
+  isVaultSession: boolean
   /** Set and on disk, relative to the vault. */
   folders: { role: string; path: string }[]
   /** null: the skill has a template but the vault has no templates folder. */
@@ -134,6 +138,8 @@ export function factsBlock(f: SkillFacts): string {
   return [
     `pyxis, for \`/pyxis:${f.skill}\`: vault \`${f.vault}\`, today ${f.weekday} ${f.today}, session id \`${f.sessionId}\`.`,
     `Folders, relative to the vault: ${folders}.`,
+    f.verifyTag === null ? 'Verify tag: none.' : `Verify tag: \`${f.verifyTag}\`.`,
+    ...(f.isVaultSession ? [] : [`This session is outside the vault: read \`${f.vault}/CLAUDE.md\` before writing a note.`]),
     ...templateLine(f),
     ...f.missing.map(role => `Missing: the ${role} folder is turned off or absent: say so in one line and stop.`),
     ...f.lists.flatMap(listText),
@@ -334,5 +340,5 @@ export async function skillFacts($: EngineInterface, kit: Kit, skill: Skill, cwd
     }
   }
 
-  return { skill, vault: kit.vault, today, weekday, sessionId: memory.id, folders, template, missing, lists }
+  return { skill, vault: kit.vault, today, weekday, sessionId: memory.id, verifyTag: kit.verifyTag, isVaultSession: isWithin(cwd, kit.vault), folders, template, missing, lists }
 }
