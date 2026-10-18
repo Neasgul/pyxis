@@ -22,6 +22,10 @@ pyxis gives the vault, its folders and the session id in this session's context.
 When pyxis gives the exact folder (past the context threshold), use it. If a passation already
 exists for this task, update it rather than writing a second one.
 
+When the user typed `/pyxis:passation`, pyxis attaches a block starting
+`pyxis, for /pyxis:passation`: its `Write it in` folder is the exact one, and
+`Open passations there` are the ones to update rather than duplicate.
+
 ## Format
 
 If the vault's templates folder holds `passation.md`, follow it: its frontmatter, its sections,

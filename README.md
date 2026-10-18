@@ -29,6 +29,12 @@ The mechanisms of a second brain kept in an Obsidian vault:
 - **Dashboard.** `/pyxis:vault` opens a pane with the open todos, the latest daily note, the inbox,
   the notes to verify, the open handoffs and the error logs. It opens by itself in a session
   of the vault.
+- **Skills.** Each one gets the vault's folders and what it needs from pyxis when you type it:
+  `/pyxis:capture` (a raw thought into the inbox), `/pyxis:inbox` (triage the inbox note by
+  note), `/pyxis:daily` (write today's note), `/pyxis:morning` (the morning brief),
+  `/pyxis:todos` (open todos, three picks for today), `/pyxis:wrapup` (review the session,
+  write its summary), `/pyxis:decision` (record a settled decision in a hub's folder),
+  `/pyxis:hub` (create or update a project hub), `/pyxis:passation` (hand a task over).
 
 Options: `vault` (the vault's folder, required), `language` (`en` or `fr`) and `threshold`
 (tokens, 300k by default).
@@ -60,7 +66,8 @@ its default, and pyxis says so once.
 }
 ```
 
-When the vault's templates folder holds `passation.md`, passations follow it.
+When the templates folder holds `daily.md`, `session.md`, `decision.md`, `hub.md` or
+`passation.md`, the matching skills follow it.
 
 pyxis never edits a note beyond what its banner and skill do, and needs nothing but Claude
 Code.
