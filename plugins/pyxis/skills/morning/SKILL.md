@@ -7,7 +7,8 @@ argument-hint: [optional focus]
 
 pyxis attaches a block to this command, starting `pyxis, for /pyxis:morning`: the vault, today's
 date, the vault's folders and what this skill needs. If it is not in your context, pyxis's hooks
-did not run: tell the user so in one line and stop. Folders below are roles (the inbox folder,
+did not run or failed: tell the user so in one line (the vault's `pyxis-errors.log` or the plugin's
+`vault` option may say why) and stop. Folders below are roles (the inbox folder,
 the hubs folder…); the block names them. If the block says a folder is missing, say so and stop.
 
 Write notes in the language of the template, else of the vault's CLAUDE.md, else of the notes
@@ -15,7 +16,8 @@ around them. Reply in the user's language.
 
 The block gives `Today's daily note` (exists or absent), `Previous daily note`,
 `Session notes of today`, `Newest session note`, `Open todos` (overdue first),
-`Repositories of the hubs` and `Inbox, oldest first` with each note's age.
+`Repositories of the hubs` and `Inbox, oldest first` with each note's age. A list that ends
+with `- … and N more` is cut: say so, and look in the folder for the rest if you need it.
 
 If `Repositories of the hubs` is `none`, no hub declares `repos:` yet: say so in one line,
 suggest `/pyxis:hub <name>`, and move on — don't fall back to globbing the user's
@@ -23,8 +25,9 @@ project folders.
 
 ## Steps
 
-1. Open today's note. If it doesn't exist, create it: follow the template if the block names
-   one and fill its placeholders, else use:
+1. Open today's note. If it doesn't exist, create it: if the block's `Template:` line names a file
+   to follow, follow it and fill its placeholders (never edit the template); if it says
+   `Template: none`, use the default format below:
 
    ```markdown
    ---

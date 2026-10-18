@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 pyxis attaches a block to this command, starting `pyxis, for /pyxis:decision`: the vault, today's
 date, the vault's folders and what this skill needs. If it is not in your context, pyxis's hooks
-did not run: tell the user so in one line and stop. Folders below are roles (the inbox folder,
+did not run or failed: tell the user so in one line (the vault's `pyxis-errors.log` or the plugin's
+`vault` option may say why) and stop. Folders below are roles (the inbox folder,
 the hubs folder…); the block names them. If the block says a folder is missing, say so and stop.
 
 Write notes in the language of the template, else of the vault's CLAUDE.md, else of the notes
@@ -20,8 +21,9 @@ Decision: $ARGUMENTS
 ## Where it goes
 
 `<hubs>/<Folder>/<today>-<slug>.md`. The hub is the one under `This session's hubs` in the
-block; if there is none, or several, ask me. The note follows the template if the block names
-one (fill its placeholders; never edit the template). Otherwise:
+block; if there is none, or several, ask me. If the block's `Template:` line names a file to
+follow, follow it (fill its placeholders; never edit the template); if it says `Template: none`,
+use the default format below:
 
 ```yaml
 ---
@@ -36,7 +38,8 @@ vault's CLAUDE.md names a ticket tool and a ticket actually came up. Don't hunt 
 
 ## Body
 
-Four sections, in this order:
+In the default format, four sections, in this order (a template's own sections win over them,
+but see the rule below on `## Alternatives rejected`):
 
 - `## Context` — what forced the decision. One paragraph.
 - `## Decision` — what we settled on. State it flatly, no hedging.
@@ -45,7 +48,8 @@ Four sections, in this order:
 
 **`## Alternatives rejected` is mandatory.** If I haven't told you what we
 rejected, ask me. Never write "none considered" — it's almost never true, and
-that section is the one I'll actually reread.
+that section is the one I'll actually reread. If the template has no such section, ask me
+before dropping it.
 
 ## Two modes
 

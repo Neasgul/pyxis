@@ -18,7 +18,7 @@ import {
   thresholdNotice,
 } from './passations'
 import { rulesBlock } from './rules'
-import { factsBlock, skillFacts, skillOf } from './skills'
+import { factsBlock, skillFacts, skillOfSubmission } from './skills'
 
 // The session's values, declared in ../types: they survive a reload of the module.
 const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
@@ -70,7 +70,8 @@ async function start($: EngineInterface, s: Settings, cwd: string) {
 }
 
 /** What the model reads with this message: the start block once, cited hubs, the threshold notice, a skill's facts. */
-async function contextFor($: EngineInterface, s: Settings, message: string): Promise<string[]> {
+async function contextFor($: EngineInterface, s: Settings, e: { text: string; command?: { name: string } }): Promise<string[]> {
+  const message = e.text
   const kit = await ready($, s, 'prompt.submit')
   if (kit === null) {
     return []
@@ -112,7 +113,7 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
 
   // After the memory is saved: the skill's facts see the hubs this message cited. A failure
   // costs the facts only, not the blocks above.
-  const skill = skillOf(message)
+  const skill = skillOfSubmission(e)
   if (skill !== null) {
     try {
       blocks.push(factsBlock(await skillFacts($, kit, skill, cwd)))
@@ -172,7 +173,7 @@ export const register: Register = (on, options) => {
     if (!(await read($, isBannerHidden))) {
       await update($, isBannerHidden, () => true)
     }
-    const context = await contextFor($, s, e.text).catch(async error => {
+    const context = await contextFor($, s, e).catch(async error => {
       await failed($, s, 'prompt.submit', error)
       return []
     })

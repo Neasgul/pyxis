@@ -33,8 +33,8 @@ export type SkillFacts = {
   folders: { role: string; path: string }[]
   /** null: the skill has a template but the vault has no templates folder. */
   template: { path: string; isPresent: boolean } | null
-  /** The roles the skill needs and the vault lacks. */
-  missing: string[]
+  /** The roles the skill needs and the vault lacks; `path` is where it is expected, null when turned off. */
+  missing: { role: string; path: string | null }[]
   /** Each line without its `- `. */
   lists: { title: string; lines: string[] }[]
 }
@@ -107,6 +107,13 @@ export function skillOf(message: string): Skill | null {
   return SKILLS.find(skill => skill === name) ?? null
 }
 
+/** The skill a submission runs: the engine's command name (`pyxis:<skill>`) first, the message's text as a fallback. */
+export function skillOfSubmission(e: { text: string; command?: { name: string } }): Skill | null {
+  const name = /^pyxis:(.+)$/.exec(e.command?.name ?? '')?.[1]
+
+  return SKILLS.find(skill => skill === name) ?? skillOf(e.text)
+}
+
 function listText(list: { title: string; lines: string[] }): string[] {
   const shown = list.lines.slice(0, MAX_LINES).map(line => `- ${line}`)
   if (list.lines.length > MAX_LINES) {
@@ -114,6 +121,14 @@ function listText(list: { title: string; lines: string[] }): string[] {
   }
 
   return [`${list.title}:`, ...(shown.length > 0 ? shown : ['- none'])]
+}
+
+const CONFIG = '`.claude/pyxis.json`'
+
+function missingLine({ role, path }: SkillFacts['missing'][number]): string {
+  return path === null
+    ? `Missing: the ${role} folder is turned off in ${CONFIG}: say so in one line and stop.`
+    : `Missing: the ${role} folder (\`${path}\`) is absent: create it or change it in ${CONFIG}; say so in one line and stop.`
 }
 
 function templateLine(f: SkillFacts): string[] {
@@ -141,7 +156,7 @@ export function factsBlock(f: SkillFacts): string {
     f.verifyTag === null ? 'Verify tag: none.' : `Verify tag: \`${f.verifyTag}\`.`,
     ...(f.isVaultSession ? [] : [`This session is outside the vault: read \`${f.vault}/CLAUDE.md\` before writing a note.`]),
     ...templateLine(f),
-    ...f.missing.map(role => `Missing: the ${role} folder is turned off or absent: say so in one line and stop.`),
+    ...f.missing.map(missingLine),
     ...f.lists.flatMap(listText),
   ].join('\n')
 }
@@ -168,14 +183,14 @@ function hubLine(c: Context, hub: Hub): string {
 }
 
 /** The role's folder, relative to the vault, and the files in it; empty when it is off. */
-async function files($: EngineInterface, c: Context, role: Role): Promise<{ root: string; names: string[] }> {
+async function files($: EngineInterface, c: Context, role: Role): Promise<{ root: string; names: string[]; mtimes: Map<string, number> }> {
   const root = c.disk.folders[role]
   if (root === null) {
-    return { root: '', names: [] }
+    return { root: '', names: [], mtimes: new Map() }
   }
-  const entries = await $.fs.list(`${c.kit.vault}/${root}`).catch(() => [])
+  const entries = (await $.fs.list(`${c.kit.vault}/${root}`).catch(() => [])).filter(e => e.kind === 'file')
 
-  return { root, names: entries.filter(e => e.kind === 'file').map(e => e.name).sort() }
+  return { root, names: entries.map(e => e.name).sort(), mtimes: new Map(entries.map(e => [e.name, e.mtimeMs])) }
 }
 
 async function inboxLines($: EngineInterface, c: Context): Promise<string[]> {
@@ -268,8 +283,11 @@ async function listLines($: EngineInterface, c: Context, title: ListTitle): Prom
       return names.filter(n => n.startsWith(c.today)).map(n => `\`${root}/${n}\``)
     }
     case 'Newest session note': {
-      const { root, names } = await files($, c, 'sessions')
-      const newest = names.filter(n => /^\d{4}-\d{2}-\d{2}/.test(n)).at(-1)
+      const { root, names, mtimes } = await files($, c, 'sessions')
+      const dated = names.filter(n => /^\d{4}-\d{2}-\d{2}/.test(n))
+      // The latest date, then the latest modification among that date's notes.
+      const day = dated.map(n => n.slice(0, 10)).at(-1)
+      const newest = dated.filter(n => n.startsWith(day ?? '')).sort((a, b) => (mtimes.get(a) ?? 0) - (mtimes.get(b) ?? 0)).at(-1)
 
       return newest === undefined ? [] : [`\`${root}/${newest}\``]
     }
@@ -289,14 +307,16 @@ async function listLines($: EngineInterface, c: Context, title: ListTitle): Prom
   }
 }
 
-/** The roles the skill needs that the vault turns off or lacks. */
-function missingRoles(skill: Skill, disk: Kit): string[] {
+/** The roles the skill needs that the vault turns off or lacks, with the path the conventions expect. */
+function missingRoles(skill: Skill, kit: Kit, disk: Kit): SkillFacts['missing'] {
   const isOff = (role: Needed) => (role === 'passations' ? disk.passations.folder === null : disk.folders[role] === null)
+  const expected = (role: Needed) => (role === 'passations' ? kit.passations.folder : kit.folders[role])
+  const missing = (roles: Needed[]) => roles.map(role => ({ role, path: expected(role) }))
   if (skill === 'todos') {
-    return isOff('daily') && isOff('hubs') ? ['daily', 'hubs'] : []
+    return isOff('daily') && isOff('hubs') ? missing(['daily', 'hubs']) : []
   }
 
-  return REQUIRED[skill].filter(isOff)
+  return missing(REQUIRED[skill].filter(isOff))
 }
 
 /** The facts for `skill`, read now from the vault: the date, the folders, the template and the lists. */
@@ -328,7 +348,7 @@ export async function skillFacts($: EngineInterface, kit: Kit, skill: Skill, cwd
     template = { path, isPresent: (await $.fs.stat(`${kit.vault}/${path}`).catch(() => null))?.kind === 'file' }
   }
 
-  const missing = missingRoles(skill, disk)
+  const missing = missingRoles(skill, kit, disk)
   const lists: SkillFacts['lists'] = []
   if (missing.length === 0) {
     const repo = await repoRoot($, cwd)

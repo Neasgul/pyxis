@@ -69,7 +69,7 @@ its default, and pyxis says so once.
 When the templates folder holds `daily.md`, `session.md`, `decision.md`, `hub.md` or
 `passation.md`, the matching skills follow it.
 
-pyxis never edits a note beyond what its banner and skill do, and needs nothing but Claude
+pyxis never edits a note beyond what its banner, its dashboard and its skills do, and needs nothing but Claude
 Code.
 
 ## Install from a local clone

@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { HOME, VAULT, fakeEngine, lastContext, startIn } from './fake'
 import type { Notes } from './fake'
-import { factsBlock, skillOf } from './skills'
+import { factsBlock, skillOf, skillOfSubmission } from './skills'
 import type { SkillFacts } from './skills'
 
 const OPTIONS = { options: { vault: VAULT } }
@@ -78,9 +78,21 @@ test('factsBlock: the template line says what is missing, and is left out for a 
   expect(factsBlock({ ...FACTS, skill: 'inbox', template: null, lists: [] })).not.toContain('Template:')
 })
 
-test('factsBlock: a missing folder is said once, with no list', () => {
-  const block = factsBlock({ ...FACTS, missing: ['daily'], lists: [] })
-  expect(block).toContain('Missing: the daily folder is turned off or absent: say so in one line and stop.')
+test('factsBlock: a missing folder is said once, with its path and the way out, and no list', () => {
+  const absent = factsBlock({ ...FACTS, missing: [{ role: 'daily', path: 'Daily' }], lists: [] })
+  expect(absent).toContain(
+    'Missing: the daily folder (`Daily`) is absent: create it or change it in `.claude/pyxis.json`; say so in one line and stop.',
+  )
+  const off = factsBlock({ ...FACTS, missing: [{ role: 'daily', path: null }], lists: [] })
+  expect(off).toContain('Missing: the daily folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
+})
+
+test('skillOfSubmission: the engine’s command name first, the text as a fallback', () => {
+  expect(skillOfSubmission({ text: 'whatever the engine rendered', command: { name: 'pyxis:daily', args: '' } })).toBe('daily')
+  expect(skillOfSubmission({ text: '/pyxis:capture une idée' })).toBe('capture')
+  expect(skillOfSubmission({ text: 'hello', command: { name: 'pyxis:vault', args: '' } })).toBeNull()
+  expect(skillOfSubmission({ text: 'hello', command: { name: 'compact', args: '' } })).toBeNull()
+  expect(skillOfSubmission({ text: 'hello' })).toBeNull()
 })
 
 test('lists are capped: 30 lines, then how many more', () => {
@@ -101,6 +113,19 @@ test('daily: its model, today’s note, the previous one and the sessions of tod
   expect(block).toContain('Previous daily note:\n- `Daily/2026-10-12.md`')
   expect(block).toContain('Session notes of today:\n- `AI/sessions/2026-10-13-today.md`')
   expect(block).not.toContain('2026-10-12-before.md')
+})
+
+test('morning: the newest session note is the latest date, then the latest modification, not the last name', OPTIONS, async ($, on) => {
+  const notes: Notes = {
+    ...NOTES,
+    [`${V}/AI/sessions/2026-10-13-aaa.md`]: 'x',
+    [`${V}/AI/sessions/2026-10-13-zzz.md`]: ['x', 1],
+    [`${V}/AI/sessions/2026-10-13-today.md`]: ['x', 2],
+  }
+  const fake = fakeEngine(on, notes, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:morning' })
+
+  expect(facts(fake)).toContain('Newest session note:\n- `AI/sessions/2026-10-13-aaa.md`')
 })
 
 test('morning: todos overdue first, the hubs’ repositories, the inbox oldest first', OPTIONS, async ($, on) => {
@@ -174,7 +199,7 @@ test('a folder the skill needs is missing: said, nothing listed', OPTIONS, async
   await $.prompt.submit({ text: '/pyxis:daily' })
 
   const block = facts(fake)
-  expect(block).toContain('Missing: the daily folder is turned off or absent: say so in one line and stop.')
+  expect(block).toContain('Missing: the daily folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
   expect(block).not.toContain('Previous daily note')
   expect(block.split('\n')[1]).not.toContain('daily')
 })
@@ -191,8 +216,8 @@ test('todos: both folders missing, both said', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, { [`${V}/Inbox/`]: '' }, {}, GIT)
   await $.prompt.submit({ text: '/pyxis:todos' })
 
-  expect(facts(fake)).toContain('Missing: the daily folder is turned off or absent')
-  expect(facts(fake)).toContain('Missing: the hubs folder is turned off or absent')
+  expect(facts(fake)).toContain('Missing: the daily folder (`Daily`) is absent: create it or change it in `.claude/pyxis.json`')
+  expect(facts(fake)).toContain('Missing: the hubs folder (`Projects`) is absent: create it or change it in `.claude/pyxis.json`')
 })
 
 test('an empty vault: every list says none', OPTIONS, async ($, on) => {

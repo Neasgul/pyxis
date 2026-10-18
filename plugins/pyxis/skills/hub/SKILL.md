@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 pyxis attaches a block to this command, starting `pyxis, for /pyxis:hub`: the vault, today's
 date, the vault's folders and what this skill needs. If it is not in your context, pyxis's hooks
-did not run: tell the user so in one line and stop. Folders below are roles (the inbox folder,
+did not run or failed: tell the user so in one line (the vault's `pyxis-errors.log` or the plugin's
+`vault` option may say why) and stop. Folders below are roles (the inbox folder,
 the hubs folder…); the block names them. If the block says a folder is missing, say so and stop.
 
 Write notes in the language of the template, else of the vault's CLAUDE.md, else of the notes
@@ -19,17 +20,19 @@ Project: $ARGUMENTS
 
 ## Target
 
-`<hubs>/<Folder>/<folder in lowercase>.md` — folder capitalised, filename lowercase
-kebab. Create the folder if it's missing; it's not a root folder, so don't
-ask first.
+`<hubs>/<Folder>/<folder in lowercase>.md`: the file name is the folder name in lowercase,
+character for character (`Otter-Pond/otter-pond.md`, `DesignVault/designvault.md`), so pick the
+folder name with that in mind. Create the folder if it's missing; it's not a root folder, so
+don't ask first.
 
 Before creating anything, look in `Hubs` for a hub with a close name (another spelling, a
 prefix, a plural). If there is one, propose it and ask whether I mean it.
 
 ## If the hub doesn't exist
 
-1. Write the skeleton and stop there. If the block names a template, follow it and fill its
-   placeholders; never edit the template. Otherwise:
+1. Write the skeleton and stop there. If the block's `Template:` line names a file to follow,
+   follow it and fill its placeholders; never edit the template. If it says `Template: none`,
+   use the default format below:
 
    ```yaml
    ---
@@ -43,7 +46,8 @@ prefix, a plural). If there is one, propose it and ask whether I mean it.
 
    Then these headings, in order, all empty: `## Purpose` `## Stack`
    `## Architecture` `## Endpoints` `## Deploy & infra` `## Gotchas`
-   `## Open questions` `## Related notes`.
+   `## Open questions` `## Related notes`. They are the default format only: a template's
+   own sections win, and the interview below fills those instead.
 
 2. Interview me. Three questions at a time, maximum. Purpose and stack
    first, then repos and triggers, then deploy, then gotchas. Write each answer into
