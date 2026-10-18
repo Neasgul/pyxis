@@ -14,7 +14,9 @@ around them. Reply in the user's language.
 
 The block gives the hubs, this session's hubs, and the error logs of the hooks.
 
-Session transcript: !`ls ~/.claude/projects/*/${CLAUDE_SESSION_ID}.jsonl 2>/dev/null`
+The session transcript is on disk at `~/.claude/projects/*/${CLAUDE_SESSION_ID}.jsonl`. This
+conversation is already in your context: open the file only if a compaction dropped messages
+(reading outside the working directories may need my approval).
 
 Three questions only: did I leave something you asked for unfinished, is
 what we learned written in the right place, and what would have made the
