@@ -101,7 +101,7 @@ async function activePassations($: EngineInterface, kit: Kit, root: string) {
 }
 
 /** Error logs only (`*-errors.log`): the logs folder holds other output too. */
-async function errorLogs($: EngineInterface, kit: Kit, root: string): Promise<DashboardRow[]> {
+export async function errorLogs($: EngineInterface, kit: Kit, root: string): Promise<DashboardRow[]> {
   const rows: DashboardRow[] = []
   for (const f of await list($, kit, root)) {
     if (f.kind !== 'file' || f.size === 0 || !f.name.endsWith('-errors.log')) {

@@ -36,9 +36,15 @@ const done = (stdout: string, exitCode = 0) => ({
 
 /**
  * `repos` maps a folder (a repository or one of its worktrees) to its main checkout, as
- * `git rev-parse --git-common-dir` finds it.
+ * `git rev-parse --git-common-dir` finds it. `git` gives a repository's branch and number of
+ * uncommitted files, for `git -C <repository> branch --show-current` and `status --porcelain`.
  */
-export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> = {}): Fake {
+export function fakeEngine(
+  on: On,
+  notes: Notes,
+  repos: Record<string, string> = {},
+  git: Record<string, { branch: string; changes: number }> = {},
+): Fake {
   const files = new Map<string, Note>(
     Object.entries(notes).map(([path, v]) =>
       typeof v === 'string' ? [path, { text: v, mtimeMs: NOW }] : [path, { text: v[0], mtimeMs: NOW - v[1] * DAY }],
@@ -135,6 +141,16 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     if (argv[0] === 'git') {
+      const subcommand = argv.slice(3).join(' ')
+      if (subcommand === 'branch --show-current' || subcommand === 'status --porcelain') {
+        const state = git[argv[2] ?? '']
+        if (!state) {
+          return done('', 128)
+        }
+        const changed = Array.from({ length: state.changes }, (_, i) => ` M f${i}\n`).join('')
+
+        return done(subcommand === 'branch --show-current' ? `${state.branch}\n` : changed)
+      }
       const folder = Object.keys(repos)
         .filter(f => isWithin(argv[2] ?? '', f))
         .sort((a, b) => b.length - a.length)[0]
@@ -145,7 +161,7 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
       return grep(argv, e.init?.cwd ?? fake.session.cwd)
     }
     if (argv[0] === 'date') {
-      return done('2026-10-13 10:42\n')
+      return done(argv[1] === '+%Y-%m-%d %u' ? '2026-10-13 2\n' : '2026-10-13 10:42\n')
     }
     if (argv[0] === 'uname') {
       return done('Darwin\n')

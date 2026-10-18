@@ -18,6 +18,7 @@ import {
   thresholdNotice,
 } from './passations'
 import { rulesBlock } from './rules'
+import { factsBlock, skillFacts, skillOf } from './skills'
 
 // The session's values, declared in ../types: they survive a reload of the module.
 const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
@@ -68,7 +69,7 @@ async function start($: EngineInterface, s: Settings, cwd: string) {
   }
 }
 
-/** What the model reads with this message: the start block once, cited hubs, the threshold notice. */
+/** What the model reads with this message: the start block once, cited hubs, the threshold notice, a skill's facts. */
 async function contextFor($: EngineInterface, s: Settings, message: string): Promise<string[]> {
   const kit = await ready($, s, 'prompt.submit')
   if (kit === null) {
@@ -108,6 +109,17 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
   }
 
   await saveMemory($, { ...memory, isPrimed: true, served: union(memory.served, composed.served), active })
+
+  // After the memory is saved: the skill's facts see the hubs this message cited. A failure
+  // costs the facts only, not the blocks above.
+  const skill = skillOf(message)
+  if (skill !== null) {
+    try {
+      blocks.push(factsBlock(await skillFacts($, kit, skill, cwd)))
+    } catch (error) {
+      await failed($, s, 'prompt.submit', error)
+    }
+  }
 
   return blocks
 }
