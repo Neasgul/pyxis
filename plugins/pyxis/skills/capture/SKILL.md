@@ -26,8 +26,9 @@ Frontmatter: created (today), tags, status: active.
   leave `tags: []`.
 - Add a ticket field only if the vault's CLAUDE.md names a ticket tool and I gave a ticket.
 
-Body: my words, cleaned of typos only. If I mentioned an existing note,
-link it with [[wikilinks]].
+Body: my words, in the language I typed them (no translation, no rewording), cleaned of typos
+only. The language rule above applies to the frontmatter and structure, not to my words.
+If I mentioned an existing note, link it with [[wikilinks]].
 
 Then print the path and nothing else.
 
