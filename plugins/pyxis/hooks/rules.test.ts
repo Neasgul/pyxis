@@ -92,11 +92,11 @@ test('folders absent from disk: the block says nothing of them', OPTIONS, async 
   expect(block).toContain('3. Never delete a note: ask.')
 })
 
-test('/passations or /vault typed first: the block waits for the next message', OPTIONS, async ($, on) => {
+test('/pyxis:passations or /pyxis:vault typed first: the block waits for the next message', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, { [`${VAULT}/Inbox/a.md`]: 'x' })
   await $.session.start(startIn(VAULT))
-  await $.prompt.submit({ text: '/passations' })
-  await $.prompt.submit({ text: '/vault' })
+  await $.prompt.submit({ text: '/pyxis:passations' })
+  await $.prompt.submit({ text: '/pyxis:vault' })
   await $.prompt.submit({ text: 'bonjour' })
 
   const blocks = fake.prompts.map(p => p.context.filter(c => c.startsWith('pyxis: ')).length)

@@ -24,9 +24,9 @@ The mechanisms of a second brain kept in an Obsidian vault:
   the hub with its first message; a message naming a hub or one of its triggers gets it too,
   once per session.
 - **Passations** (handoffs). At start, a banner lists the open ones of the session's
-  repository; "Resume" files the note and resumes it. Past the threshold, the model is asked
-  to write one, as `/pyxis:passation` describes.
-- **Dashboard.** `/vault` opens a pane with the open todos, the latest daily note, the inbox,
+  repository; "Resume" files the note and resumes it; `/pyxis:passations` shows the banner
+  again. Past the threshold, the model is asked to write one, as `/pyxis:passation` describes.
+- **Dashboard.** `/pyxis:vault` opens a pane with the open todos, the latest daily note, the inbox,
   the notes to verify, the open handoffs and the error logs. It opens by itself in a session
   of the vault.
 

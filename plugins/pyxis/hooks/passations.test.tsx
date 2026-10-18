@@ -55,7 +55,7 @@ test('a hub cited in a message adds its repositories’ handoffs to /passations'
   await $.session.start(startIn(VAULT))
   await $.prompt.submit({ text: 'Où en est la revue de sécurité côté Verbena ?' })
 
-  expect(await $.command.run({ command: 'passations' })).toEqual({
+  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
     text: '2 passation(s) en cours (hors dépôt, otter), au-dessus de la zone de saisie.',
   })
   const ui = await banner($)
@@ -108,7 +108,7 @@ test('resuming a repository’s handoff from the vault says so', OPTIONS, async 
   const fake = fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(VAULT))
   await $.prompt.submit({ text: 'otter' })
-  await $.command.run({ command: 'passations' })
+  await $.command.run({ command: 'pyxis:passations' })
   await (await banner($)).press({ key: 'resume:otterbackend/refonte-design.md' })
 
   expect(fake.commands.at(-1)).toEqual([
@@ -125,7 +125,7 @@ test('the first message hides the banner, /passations shows it again', OPTIONS, 
   await $.prompt.submit({ text: 'process the inbox' })
   expect(await (await banner($)).find({ key: 'engine' })).toBeDefined()
 
-  expect(await $.command.run({ command: 'passations' })).toEqual({
+  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
     text: '1 passation(s) en cours (hors dépôt), au-dessus de la zone de saisie.',
   })
   expect(await (await banner($)).find({ key: 'resume:hors-depot/kit-vault-victoire.md' })).toBeDefined()
@@ -144,7 +144,7 @@ test('in a repository without a hub, from a worktree: its handoffs, at start and
   await ui.unmount()
 
   await $.prompt.submit({ text: 'on continue' })
-  expect(await $.command.run({ command: 'passations' })).toEqual({
+  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
     text: '3 passation(s) en cours (hors dépôt, Android_App_Sample), au-dessus de la zone de saisie.',
   })
   await (await banner($)).press({ key: 'resume:Android_App_Sample/maquettes-v2.md' })
@@ -155,7 +155,7 @@ test('in a repository without a hub, from a worktree: its handoffs, at start and
 test('a hub’s repository is not named twice in /passations', OPTIONS, async ($, on) => {
   fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(OTTER))
-  expect(await $.command.run({ command: 'passations' })).toEqual({
+  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
     text: '2 passation(s) en cours (hors dépôt, otter), au-dessus de la zone de saisie.',
   })
 })

@@ -25,8 +25,13 @@ const isBannerHidden = atom({ plugin: 'pyxis', key: 'isBannerHidden' } as const,
 
 const union = (a: string[], b: string[]) => [...new Set([...a, ...b])]
 
+// The commands are files of the plugin (`commands/`), so that the desktop app lists them too:
+// they run as `/pyxis:<name>`, and the hooks below answer them without the model.
+const PASSATIONS_COMMAND = 'pyxis:passations'
+const VAULT_COMMAND = 'pyxis:vault'
+
 /** pyxis's own commands answer without the model: what goes with a message waits for the next. */
-const isOwnCommand = (prompt: string) => /^\/(passations|vault)(\s|$)/.test(prompt.trimStart())
+const isOwnCommand = (prompt: string) => /^\/pyxis:(passations|vault)(\s|$)/.test(prompt.trimStart())
 
 /** A hook never blocks a message: what fails goes to the error log. */
 async function failed($: EngineInterface, s: Settings, where: string, error: unknown) {
@@ -107,7 +112,7 @@ async function contextFor($: EngineInterface, s: Settings, message: string): Pro
   return blocks
 }
 
-/** `/passations`: the banner again, over `outsideRepo`, the session's repository and the active hubs. */
+/** `/pyxis:passations`: the banner again, over `outsideRepo`, the session's repository and the active hubs. */
 async function passationsCommand($: EngineInterface, s: Settings): Promise<{ text: string }> {
   const t = text(s.language)
   const kit = await ready($, s, 'command.run')
@@ -132,8 +137,6 @@ export const register: Register = (on, options) => {
   const t = text(s.language)
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'passations', description: t.passationsCommand })
-    await $.command.register({ name: 'vault', description: t.vaultCommand })
     const started = await next(e)
     await start($, s, e.cwd).catch(error => failed($, s, 'session.start', error))
 
@@ -153,7 +156,7 @@ export const register: Register = (on, options) => {
     if (isOwnCommand(e.text)) {
       return next(e)
     }
-    // The banner is for the start: the first message hides it, `/passations` shows it again.
+    // The banner is for the start: the first message hides it, `/pyxis:passations` shows it again.
     if (!(await read($, isBannerHidden))) {
       await update($, isBannerHidden, () => true)
     }
@@ -184,9 +187,16 @@ export const register: Register = (on, options) => {
     return compacted
   })
 
-  on('command.run', { command: 'passations' }, async $ => passationsCommand($, s))
+  // The menu in the chosen language; the command files carry the English.
+  on('command.describe', { command: PASSATIONS_COMMAND }, async ($, e, next) => ({
+    ...(await next(e)),
+    description: t.passationsCommand,
+  }))
+  on('command.describe', { command: VAULT_COMMAND }, async ($, e, next) => ({ ...(await next(e)), description: t.vaultCommand }))
 
-  on('command.run', { command: 'vault' }, async $ => {
+  on('command.run', { command: PASSATIONS_COMMAND }, async $ => passationsCommand($, s))
+
+  on('command.run', { command: VAULT_COMMAND }, async $ => {
     const kit = await ready($, s, 'command.run')
     if (kit === null) {
       return { text: t.vaultMissing(s.vault) }

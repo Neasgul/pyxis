@@ -19,6 +19,8 @@ export type Fake = {
   session: { cwd: string; id: string }
   /** The surfaces attached: the one the session started on, then each that attached. */
   surfaces: RenderSurface[]
+  /** Slash commands the plugin registered at run time. */
+  registered: string[]
   /** What the next compaction reports as the conversation's size afterwards. */
   tokensAfter?: number
 }
@@ -50,6 +52,7 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
     panes: [],
     session: { cwd: VAULT, id: 'S1' },
     surfaces: [],
+    registered: [],
   }
   const isDir = (path: string) => [...files.keys()].some(k => k.startsWith(`${path}/`))
   const entries = (path: string): FsEntry[] => {
@@ -107,7 +110,11 @@ export function fakeEngine(on: On, notes: Notes, repos: Record<string, string> =
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('clock.now', () => ({ value: NOW }))
-  on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('command.describe', (_$, e) => ({ description: e.description, argumentHint: e.argumentHint, isHidden: e.isHidden }))
+  on('command.register', (_$, e) => {
+    fake.registered.push(e.name)
+    return { value: { command: e.name } }
+  })
   on('fs.stat', (_$, e) => {
     const note = files.get(e.path)
     if (note) {

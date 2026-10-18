@@ -95,12 +95,12 @@ test('a row opens its note in Obsidian: open on macOS', OPTIONS, async ($, on) =
   expect(fake.commands.at(-1)).toEqual(['open', `obsidian://open?path=${encodeURIComponent(`${VAULT}/Daily/2026-09-29.md`)}`])
 })
 
-test('outside the vault: nothing opens by itself, /vault opens it', OPTIONS, async ($, on) => {
+test('outside the vault: nothing opens by itself, /pyxis:vault opens it', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES)
   await $.session.start(startIn(`${HOME}/Projects/otterbackend`))
   expect(fake.panes).toEqual([])
 
-  expect(await $.command.run({ command: 'vault' })).toEqual({ text: 'Tableau du vault ouvert.' })
+  expect(await $.command.run({ command: 'pyxis:vault' })).toEqual({ text: 'Tableau du vault ouvert.' })
   expect(fake.panes).toEqual(['pyxis-vault'])
 })
 
@@ -128,4 +128,21 @@ test('a pane closed by hand stays closed when a surface attaches', OPTIONS, asyn
   fake.panes.length = 0
   await $.session.attach({ surface: 'mobile', clientId: 'mobile:phone' })
   expect(fake.panes).toEqual([])
+})
+
+// The desktop app lists a plugin's command files, not what a module registers at start.
+test('the commands are the plugin’s files: nothing registered at start, the menu in the chosen language', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES)
+  await $.session.start(startIn(VAULT))
+  expect(fake.registered).toEqual([])
+
+  const provider = { plugin: 'pyxis', tier: 'user' } as const
+  const described = await $.command.describe({
+    command: 'pyxis:vault',
+    description: 'Vault dashboard',
+    isHidden: false,
+    immediate: false,
+    provider,
+  })
+  expect(described.description).toBe('Tableau du vault : todos, Daily, Inbox, à vérifier, passations, erreurs')
 })
