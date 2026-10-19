@@ -70,6 +70,24 @@ test('the block goes with the first message only, and again after a compaction',
   expect(fake.prompts[0]?.context[0]).toContain('Working rules in this vault')
 })
 
+// Where an organisation manages Claude Code, `session.compact` does not reach a user plugin:
+// the transcript growing shorter tells the compaction instead.
+test('the transcript shrinks without a compaction event: the block goes again', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/Inbox/a.md`]: 'x' })
+  await $.session.start(startIn(VAULT))
+  fake.transcript = 40
+  await $.prompt.submit({ text: 'one' })
+  fake.transcript = 42
+  await $.prompt.submit({ text: 'two' })
+  fake.transcript = 2
+  await $.prompt.submit({ text: 'three' })
+  fake.transcript = 4
+  await $.prompt.submit({ text: 'four' })
+
+  const blocks = fake.prompts.map(p => p.context.filter(c => c.startsWith('pyxis: ')).length)
+  expect(blocks).toEqual([1, 0, 1, 0])
+})
+
 test('outside the vault: the block without the working rules', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, { [`${VAULT}/Inbox/a.md`]: 'x' })
   await $.session.start(startIn(`${HOME}/code`))

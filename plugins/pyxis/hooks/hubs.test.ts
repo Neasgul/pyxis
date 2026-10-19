@@ -161,6 +161,16 @@ test('after a compaction, the repository hub comes back with the next message, a
   expect(lastContext(fake)).toContain('Content of loft.')
 })
 
+test('the transcript shrinks without a compaction event: the repository hub comes again', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, HUBS, { [REPO]: REPO })
+  await $.session.start(startIn(REPO))
+  fake.transcript = 30
+  await $.prompt.submit({ text: 'bonjour' })
+  fake.transcript = 3
+  await $.prompt.submit({ text: 'on continue' })
+  expect(lastContext(fake)).toContain('Content of parcels.')
+})
+
 test('a new session id (/clear) starts over: the repository hub comes again', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, HUBS, { [REPO]: REPO })
   await $.session.start(startIn(REPO))

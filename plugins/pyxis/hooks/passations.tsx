@@ -17,6 +17,7 @@ const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
 const isBannerHidden = atom({ plugin: 'pyxis', key: 'isBannerHidden' } as const, false)
 const tokens = atom({ plugin: 'pyxis', key: 'tokens' } as const, null)
 const isThresholdHidden = atom({ plugin: 'pyxis', key: 'isThresholdHidden' } as const, false)
+const isThresholdNoticed = atom({ plugin: 'pyxis', key: 'isThresholdNoticed' } as const, false)
 
 /** The context size last measured in this session; null before a measurement, after a `/clear` or an unsized compaction. */
 export async function contextSize($: EngineInterface): Promise<number | null> {
@@ -25,13 +26,28 @@ export async function contextSize($: EngineInterface): Promise<number | null> {
   return measured !== null && measured.id === (await $.session.id()) ? measured.size : null
 }
 
-/** Keeps a measurement (null: unknown). Below the threshold, a hidden warning is armed for the next crossing. */
+/** Keeps a measurement (null: unknown). Below the threshold, the warning and the notice are armed for the next crossing. */
 export async function recordSize($: EngineInterface, size: number | null, threshold: number) {
   const id = await $.session.id()
   await update($, tokens, () => (size === null ? null : { id, size }))
-  if ((size === null || size < threshold) && (await read($, isThresholdHidden))) {
-    await update($, isThresholdHidden, () => false)
+  if (size === null || size < threshold) {
+    if (await read($, isThresholdHidden)) {
+      await update($, isThresholdHidden, () => false)
+    }
+    if (await read($, isThresholdNoticed)) {
+      await update($, isThresholdNoticed, () => false)
+    }
   }
+}
+
+/** True once per crossing, unless the warning was hidden: the notice then goes with this message. */
+export async function claimNotice($: EngineInterface, size: number, threshold: number): Promise<boolean> {
+  if (size < threshold || (await read($, isThresholdHidden)) || (await read($, isThresholdNoticed))) {
+    return false
+  }
+  await update($, isThresholdNoticed, () => true)
+
+  return true
 }
 
 /** At most this many handoffs are listed for the model. */

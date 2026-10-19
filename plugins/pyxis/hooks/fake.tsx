@@ -23,6 +23,8 @@ export type Fake = {
   registered: string[]
   /** What the next compaction reports as the conversation's size afterwards. */
   tokensAfter?: number
+  /** How many messages `$.session.messages({ as: 'api' })` returns. */
+  transcript: number
 }
 
 /** `[text, days ago]` for an older note. */
@@ -59,6 +61,7 @@ export function fakeEngine(
     session: { cwd: VAULT, id: 'S1' },
     surfaces: [],
     registered: [],
+    transcript: 0,
   }
   const isDir = (path: string) => [...files.keys()].some(k => k.startsWith(`${path}/`))
   const entries = (path: string): FsEntry[] => {
@@ -103,6 +106,9 @@ export function fakeEngine(
   on('session.surfaces', () => ({ value: fake.surfaces }))
   on('session.cwd', () => ({ value: fake.session.cwd }))
   on('session.id', () => ({ value: fake.session.id }))
+  on('session.messages', () => ({
+    value: Array.from({ length: fake.transcript }, () => ({ role: 'user' as const, content: '' })),
+  }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('session.compact', (_$, e) =>
     fake.tokensAfter === undefined ? { messages: e.messages } : { messages: e.messages, tokensAfter: fake.tokensAfter },

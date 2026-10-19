@@ -6,8 +6,9 @@ import type { Kit, Settings } from './conventions'
 import { PANE, isDashboardOpen, openDashboard, refresh, renderDashboard } from './dashboard'
 import { citedHubs, composeHubs, hubsForRoots, loadHubs, repoRoot } from './hubs'
 import { text } from './i18n'
-import { currentMemory, saveMemory } from './memory'
+import { currentMemory, measureTranscript, saveMemory } from './memory'
 import {
+  claimNotice,
   contextSize,
   modelList,
   openPassations,
@@ -69,14 +70,14 @@ async function start($: EngineInterface, s: Settings, cwd: string) {
   }
 }
 
-/** What the model reads with this message: the start block once, cited hubs, the threshold notice, a skill's facts. */
+/** What the model reads with this message: the start block once, cited hubs, the threshold notice once per crossing, a skill's facts. */
 async function contextFor($: EngineInterface, s: Settings, e: { text: string; command?: { name: string } }): Promise<string[]> {
   const message = e.text
   const kit = await ready($, s, 'prompt.submit')
   if (kit === null) {
     return []
   }
-  const memory = await currentMemory($)
+  const memory = await measureTranscript($, await currentMemory($))
   const cwd = await $.session.cwd()
   const repo = await repoRoot($, cwd)
   const isVaultSession = isWithin(cwd, kit.vault)
@@ -105,7 +106,7 @@ async function contextFor($: EngineInterface, s: Settings, e: { text: string; co
   }
   const size = await contextSize($)
   const dir = passationsDir(kit, repo)
-  if (size !== null && size >= kit.threshold && dir !== null) {
+  if (size !== null && dir !== null && (await claimNotice($, size, kit.threshold))) {
     blocks.push(thresholdNotice(size, kit.threshold, dir, memory.id, $.plugin.root))
   }
 
@@ -188,7 +189,8 @@ export const register: Register = (on, options) => {
   })
 
   // After a compaction the context holds neither the start block nor the hubs: both go again,
-  // and the size is the compacted one until the next measurement.
+  // and the size is the compacted one until the next measurement. Where an organisation manages
+  // Claude Code this hook never runs (seen 2026-10-19): `measureTranscript` sends them again.
   on('session.compact', async ($, e, next) => {
     const compacted = await next(e)
     if (e.agentId === undefined && e.trigger !== 'precompute' && !('skip' in compacted && compacted.skip)) {

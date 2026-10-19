@@ -227,6 +227,31 @@ test('the warning sends “passation”, then hides', OPTIONS, async ($, on) => 
   expect(await ui.find({ key: 'write-passation' })).toBeUndefined()
 })
 
+test('the notice goes once per crossing', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  await $.session.measure(measured(612_000))
+  await $.prompt.submit({ text: 'bonjour' })
+  expect(lastContext(fake)).toContain('past the threshold')
+  await $.session.measure(measured(640_000))
+  await $.prompt.submit({ text: 'suite' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+
+  await $.session.measure(measured(40_000))
+  await $.session.measure(measured(305_000))
+  await $.prompt.submit({ text: 'encore' })
+  expect(lastContext(fake)).toContain('past the threshold')
+})
+
+test('hidden, the warning sends no notice either', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  await $.session.measure(measured(310_000))
+  await (await banner($)).press({ key: 'hide-threshold' })
+  await $.prompt.submit({ text: 'bonjour' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+})
+
 test('outside any repository, the notice points to outsideRepo', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(`${HOME}/Downloads`))

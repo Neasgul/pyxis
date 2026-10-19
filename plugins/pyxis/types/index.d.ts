@@ -22,6 +22,8 @@ export type SessionMemory = {
   served: string[]
   /** Hubs of the session's repository or cited since: their repositories' handoffs are listed. */
   active: string[]
+  /** How many messages the model read at the last message: fewer now means a compaction. */
+  transcript: number
 }
 
 /** A `- [ ]` line of the daily or hubs folder. */
@@ -67,6 +69,8 @@ declare module 'claude-code' {
       /** Context size at the last measurement, and the session it was measured in: a `/clear` makes it stale. */
       tokens: { id: string; size: number } | null
       isThresholdHidden: boolean
+      /** The threshold notice went with a message since the last crossing. */
+      isThresholdNoticed: boolean
       dashboard: Dashboard | null
     }
   }

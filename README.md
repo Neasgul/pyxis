@@ -25,7 +25,9 @@ The mechanisms of a second brain kept in an Obsidian vault:
   once per session.
 - **Passations** (handoffs). At start, a banner lists the open ones of the session's
   repository; "Resume" files the note and resumes it; `/pyxis:passations` shows the banner
-  again. Past the threshold, the model is asked to write one, as `/pyxis:passation` describes.
+  again. Past the threshold, the model is asked once to write one, as `/pyxis:passation`
+  describes; it is asked again after the context falls back below the threshold. Hiding the
+  warning cancels the request too.
 - **Dashboard.** `/pyxis:vault` opens a pane with the open todos, the latest daily note, the inbox,
   the notes to verify, the open handoffs and the error logs. It opens by itself in a session
   of the vault.
@@ -71,6 +73,9 @@ When the templates folder holds `daily.md`, `session.md`, `decision.md`, `hub.md
 
 pyxis never edits a note beyond what its banner, its dashboard and its skills do, and needs nothing but Claude
 Code.
+
+The rules and the hubs go with your messages, so subagents never get them: keep your working
+rules in the vault's `CLAUDE.md` too, and the hub rule in your own `~/.claude/CLAUDE.md`.
 
 ## Install from a local clone
 
