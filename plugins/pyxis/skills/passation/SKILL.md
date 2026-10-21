@@ -54,7 +54,8 @@ Add a ticket field when the vault's CLAUDE.md names a ticket tool and the task h
 
 ## Content
 
-- Facts, not git state: Claude Code gives the next session the git status.
+- Facts, not git state: Claude Code gives the next session the git status. No list of
+  uncommitted files or commits; a commit is named only for what it settled.
 - Done and decided: what is settled and why, with what was rejected, so that the next session
   does not decide it again.
 - Read first: the notes, files and specs to read, in order.

@@ -41,3 +41,16 @@ test('settings: a threshold under 1000 or not a number falls back to the default
   expect(settings({}).language).toBe('en')
   expect(settings({ language: 'de' }).language).toBe('en')
 })
+
+test('a model window under the threshold: the threshold is 75% of the window', () => {
+  expect(statusLine(160_000, [], 300_000, 'en', 200_000)).toBe('ctx 160k / 150k · over threshold')
+  expect(statusLine(160_000, [], 300_000, 'en', 1_000_000)).toBe('ctx 160k / 300k')
+})
+
+test('the windows in a fixed order, whatever the engine’s', () => {
+  const limits: SessionRateLimit[] = [
+    { kind: 'seven_day', percentUsed: 12 },
+    { kind: 'five_hour', percentUsed: 34 },
+  ]
+  expect(statusLine(10_000, limits, 300_000, 'en')).toBe('ctx 10k / 300k · 5h 34% · 7d 12%')
+})

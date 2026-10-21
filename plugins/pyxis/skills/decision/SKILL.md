@@ -53,8 +53,9 @@ before dropping it.
 
 ## Two modes
 
-**A decision was just made in this conversation** — draft all four sections
-from it and show me before you write anything.
+**A decision was just made in this conversation** — draft the note's sections
+(the template's, else the four of the default format) from it and show me
+before you write anything.
 
 **Invoked cold** — interview me: what was decided, what forced it, what lost.
 Three questions at a time, maximum.
@@ -79,7 +80,8 @@ redirect you. Append only — don't reorder or restyle the hub.
 ## Don't
 
 - Don't invent the rationale. If you don't know why something was rejected,
-  ask instead of reconstructing it. Anything you inferred gets the verify tag the block names (if it says none, say what
+  ask instead of reconstructing it. Anything you inferred, a consequence
+  included, gets the verify tag the block names (if it says none, say what
   you are unsure of in plain words).
 - Don't write a decision note for something still under discussion. If it
   isn't settled, say so and stop.

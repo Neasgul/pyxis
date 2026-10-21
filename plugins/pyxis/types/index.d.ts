@@ -66,8 +66,8 @@ declare module 'claude-code' {
       /** The banner's handoffs. */
       passations: Passation[]
       isBannerHidden: boolean
-      /** Context size at the last measurement, and the session it was measured in: a `/clear` makes it stale. */
-      tokens: { id: string; size: number } | null
+      /** Context size at the last measurement, the threshold for the model's window then, and the session it was measured in: a `/clear` makes it stale. */
+      tokens: { id: string; size: number; threshold: number } | null
       isThresholdHidden: boolean
       /** The threshold notice went with a message since the last crossing. */
       isThresholdNoticed: boolean

@@ -1,8 +1,8 @@
 {
   "name": "context-gauge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Context size and usage limits in the status line, with a warning past a threshold.",
-  "author": { "name": "Benoit" },
+  "author": { "name": "Neasgul" },
   "userConfig": {
     "threshold": {
       "type": "number",

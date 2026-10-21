@@ -9,9 +9,11 @@ context reaches a threshold (300k tokens by default):
 
 ```text
 ctx 182k / 300k · 5h 34% · 7d 12%
+ctx 312k / 300k · 5h 41% · 7j 14% · seuil dépassé
 ```
 
-Options: `threshold` (tokens) and `language` (`en` or `fr`).
+Options: `threshold` (tokens) and `language` (`en` or `fr`). With a model whose context
+window is too small for the threshold, the threshold is 75% of the window (150k for 200k).
 
 ## pyxis
 
@@ -30,7 +32,8 @@ The mechanisms of a second brain kept in an Obsidian vault:
   warning cancels the request too.
 - **Dashboard.** `/pyxis:vault` opens a pane with the open todos, the latest daily note, the inbox,
   the notes to verify, the open handoffs and the error logs. It opens by itself in a session
-  of the vault.
+  of the vault; in a terminal, from 144 columns (110 once asked for). A row opens its note in
+  Obsidian through an `obsidian://` link (`open` on macOS, `xdg-open` elsewhere).
 - **Skills.** Each one gets the vault's folders and what it needs from pyxis when you type it:
   `/pyxis:capture` (a raw thought into the inbox), `/pyxis:inbox` (triage the inbox note by
   note), `/pyxis:daily` (write today's note), `/pyxis:morning` (the morning brief),
@@ -39,7 +42,7 @@ The mechanisms of a second brain kept in an Obsidian vault:
   `/pyxis:hub` (create or update a project hub), `/pyxis:passation` (hand a task over).
 
 Options: `vault` (the vault's folder, required), `language` (`en` or `fr`) and `threshold`
-(tokens, 300k by default).
+(tokens, 300k by default, 75% of the model's window when that is smaller).
 
 ### Conventions
 
@@ -77,7 +80,25 @@ Code.
 The rules and the hubs go with your messages, so subagents never get them: keep your working
 rules in the vault's `CLAUDE.md` too, and the hub rule in your own `~/.claude/CLAUDE.md`.
 
-## Install from a local clone
+Where an organisation manages Claude Code, some events never reach a user plugin. pyxis does
+without them: its blocks go with your messages, and a compaction is told by the conversation
+growing shorter.
+
+## Install
+
+With the author's permission (see [License](#license)):
+
+```bash
+claude plugin marketplace add Neasgul/pyxis
+claude plugin install context-gauge@pyxis --scope user
+claude plugin install pyxis@pyxis --scope user
+echo '{"vault":"<path to the vault>"}' | claude plugin configure pyxis@pyxis --values-stdin
+```
+
+`claude plugin marketplace update pyxis` then `claude plugin update pyxis@pyxis` bring a new
+version.
+
+### From a local clone
 
 ```bash
 claude plugin marketplace add <path to this repository>
@@ -85,3 +106,15 @@ claude plugin install context-gauge@pyxis --scope user
 claude plugin install pyxis@pyxis --scope user
 echo '{"vault":"<path to the vault>"}' | claude plugin configure pyxis@pyxis --values-stdin
 ```
+
+`claude plugin configure <plugin>` shows a plugin's options and their values; with
+`--values-stdin` it sets them, leaving out the others:
+
+```bash
+echo '{"language":"fr"}' | claude plugin configure context-gauge@pyxis --values-stdin
+```
+
+## License
+
+Copyright (c) 2026 Neasgul. All rights reserved: the code is published for reading only.
+See [LICENSE](LICENSE).

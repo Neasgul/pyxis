@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { isWithin, loadKit, logLine, onDisk, report, settings } from './conventions'
+import { effectiveThreshold, isWithin, loadKit, logLine, onDisk, report, settings } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { PANE, isDashboardOpen, openDashboard, refresh, renderDashboard } from './dashboard'
 import { citedHubs, composeHubs, hubsForRoots, loadHubs, repoRoot } from './hubs'
@@ -10,6 +10,7 @@ import { currentMemory, measureTranscript, saveMemory } from './memory'
 import {
   claimNotice,
   contextSize,
+  lastThreshold,
   modelList,
   openPassations,
   passationsDir,
@@ -104,10 +105,10 @@ async function contextFor($: EngineInterface, s: Settings, e: { text: string; co
       blocks.push(modelList(list, kit, await $.clock.now()))
     }
   }
-  const size = await contextSize($)
+  const measured = await contextSize($)
   const dir = passationsDir(kit, repo)
-  if (size !== null && dir !== null && (await claimNotice($, size, kit.threshold))) {
-    blocks.push(thresholdNotice(size, kit.threshold, dir, memory.id, $.plugin.root))
+  if (measured !== null && dir !== null && (await claimNotice($, measured.size, measured.threshold))) {
+    blocks.push(thresholdNotice(measured.size, measured.threshold, dir, memory.id, $.plugin.root))
   }
 
   await saveMemory($, { ...memory, isPrimed: true, served: union(memory.served, composed.served), active })
@@ -131,7 +132,7 @@ async function passationsCommand($: EngineInterface, s: Settings): Promise<{ tex
   const t = text(s.language)
   const kit = await ready($, s, 'command.run')
   if (kit === null) {
-    return { text: t.vaultMissing(s.vault) }
+    return { text: t.vaultMissing((await loadKit($, s)).vault) }
   }
   const memory = await currentMemory($)
   const active = (await loadHubs($, kit)).hubs.filter(h => memory.active.includes(h.name))
@@ -183,7 +184,7 @@ export const register: Register = (on, options) => {
   })
 
   on('session.measure', async ($, e, next) => {
-    await recordSize($, e.context.tokens ?? null, s.threshold)
+    await recordSize($, e.context.tokens ?? null, effectiveThreshold(s.threshold, e.context.window))
 
     return next(e)
   })
@@ -196,7 +197,8 @@ export const register: Register = (on, options) => {
     if (e.agentId === undefined && e.trigger !== 'precompute' && !('skip' in compacted && compacted.skip)) {
       const memory = await currentMemory($)
       await saveMemory($, { ...memory, isPrimed: false, served: [] })
-      await recordSize($, 'tokensAfter' in compacted ? (compacted.tokensAfter ?? null) : null, s.threshold)
+      const threshold = await lastThreshold($, s.threshold)
+      await recordSize($, 'tokensAfter' in compacted ? (compacted.tokensAfter ?? null) : null, threshold)
     }
 
     return compacted
@@ -214,7 +216,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: VAULT_COMMAND }, async $ => {
     const kit = await ready($, s, 'command.run')
     if (kit === null) {
-      return { text: t.vaultMissing(s.vault) }
+      return { text: t.vaultMissing((await loadKit($, s)).vault) }
     }
     await openDashboard($, kit)
 

@@ -214,7 +214,7 @@ test('below the threshold: no notice, no warning; past it, both', OPTIONS, async
   }
 })
 
-test('the warning sends “passation”, then hides', OPTIONS, async ($, on) => {
+test('the warning’s buttons: one sends “passation”, the other hides the warning', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(`${HOME}/Downloads`))
   await $.prompt.submit({ text: 'bonjour' })
@@ -250,6 +250,20 @@ test('hidden, the warning sends no notice either', OPTIONS, async ($, on) => {
   await (await banner($)).press({ key: 'hide-threshold' })
   await $.prompt.submit({ text: 'bonjour' })
   expect(lastContext(fake)).not.toContain('past the threshold')
+})
+
+test('a model window under the threshold: the threshold is 75% of the window', { options: { vault: VAULT } }, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(SAMPLE))
+  await $.session.measure(measured(140_000, 200_000))
+  await $.prompt.submit({ text: 'hi' })
+  expect(lastContext(fake)).not.toContain('past the threshold')
+
+  await $.session.measure(measured(160_000, 200_000))
+  await $.prompt.submit({ text: 'again' })
+  expect(lastContext(fake)).toContain('Session context: 160k tokens, past the threshold of 150k.')
+  const ui = await banner($)
+  expect((await ui.find({ type: 'Text', text: /160k/ }))?.text).toBe('Context at 160k, past the handoff threshold (150k).')
 })
 
 test('outside any repository, the notice points to outsideRepo', OPTIONS, async ($, on) => {

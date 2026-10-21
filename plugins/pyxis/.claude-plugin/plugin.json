@@ -1,8 +1,8 @@
 {
   "name": "pyxis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A second brain in an Obsidian vault: project hubs, handoffs between sessions, working rules and a vault dashboard.",
-  "author": { "name": "Benoit" },
+  "author": { "name": "Neasgul" },
   "types": "./types/index.d.ts",
   "userConfig": {
     "vault": {

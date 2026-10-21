@@ -3,9 +3,9 @@
 // this text, so it is fixed: change a line here and the SKILL.md files that name it with it.
 import type { EngineInterface } from 'claude-code'
 
-import { ROLES, folder, isWithin, onDisk } from './conventions'
+import { ROLES, folder, isWithin, listEntries, onDisk } from './conventions'
 import type { Kit, Role } from './conventions'
-import { collect, errorLogs } from './dashboard'
+import { errorLogs, inboxNotes, openTodos } from './dashboard'
 import { listField } from './frontmatter'
 import { hubsForRoots, loadHubs, repoRoot } from './hubs'
 import type { Hub } from './hubs'
@@ -54,7 +54,7 @@ const REQUIRED: Record<Skill, Needed[]> = {
   passation: ['passations'],
 }
 
-/** The model a skill follows, a file of the templates folder. */
+/** The template a skill follows, a file of the templates folder. */
 const TEMPLATE: Partial<Record<Skill, string>> = {
   daily: 'daily.md',
   morning: 'daily.md',
@@ -108,7 +108,7 @@ export function skillOf(message: string): Skill | null {
 }
 
 /** The skill a submission runs: the engine's command name (`pyxis:<skill>`) first, the message's text as a fallback. */
-export function skillOfSubmission(e: { text: string; command?: { name: string } }): Skill | null {
+export function skillOfSubmission(e: { text: string; command?: { name: string; args?: string } }): Skill | null {
   const name = /^pyxis:(.+)$/.exec(e.command?.name ?? '')?.[1]
 
   return SKILLS.find(skill => skill === name) ?? skillOf(e.text)
@@ -182,13 +182,13 @@ function hubLine(c: Context, hub: Hub): string {
   return `\`${relative(c.kit, hub.path)}\`${tags.length > 0 ? ` (tags: ${tags.join(', ')})` : ''}`
 }
 
-/** The role's folder, relative to the vault, and the files in it; empty when it is off. */
+/** The role's folder, relative to the vault, and the notes in it; empty when it is off. */
 async function files($: EngineInterface, c: Context, role: Role): Promise<{ root: string; names: string[]; mtimes: Map<string, number> }> {
   const root = c.disk.folders[role]
   if (root === null) {
     return { root: '', names: [], mtimes: new Map() }
   }
-  const entries = (await $.fs.list(`${c.kit.vault}/${root}`).catch(() => [])).filter(e => e.kind === 'file')
+  const entries = (await listEntries($, `${c.kit.vault}/${root}`)).filter(e => e.kind === 'file' && e.name.endsWith('.md'))
 
   return { root, names: entries.map(e => e.name).sort(), mtimes: new Map(entries.map(e => [e.name, e.mtimeMs])) }
 }
@@ -198,16 +198,11 @@ async function inboxLines($: EngineInterface, c: Context): Promise<string[]> {
   if (root === null) {
     return []
   }
-  const entries = await $.fs.list(`${c.kit.vault}/${root}`).catch(() => [])
-
-  return entries
-    .filter(e => e.kind === 'file' && e.name.endsWith('.md'))
-    .sort((a, b) => a.mtimeMs - b.mtimeMs)
-    .map(e => `\`${root}/${e.name}\` (${daysBetween(e.mtimeMs, c.now)} days)`)
+  return (await inboxNotes($, c.kit, root)).map(e => `\`${root}/${e.name}\` (${daysBetween(e.mtimeMs, c.now)} days)`)
 }
 
 async function todoLines($: EngineInterface, c: Context): Promise<string[]> {
-  const { todos = [] } = await collect($, c.kit)
+  const todos = await openTodos($, c.kit, [c.disk.folders.daily, c.disk.folders.hubs], c.today)
 
   return todos.map(t => {
     const suffix = t.isLate ? ` (overdue, 📅 ${t.due})` : t.due ? ` (📅 ${t.due})` : ''
@@ -216,21 +211,28 @@ async function todoLines($: EngineInterface, c: Context): Promise<string[]> {
   })
 }
 
+/** One line per repository, naming the hubs that declare it; git runs for each at once. */
 async function repositoryLines($: EngineInterface, c: Context): Promise<string[]> {
-  const lines: string[] = []
+  const owners = new Map<string, string[]>()
   for (const hub of c.hubs) {
     for (const repo of hub.repos) {
-      const branch = await $.process.run(['git', '-C', repo, 'branch', '--show-current']).catch(() => null)
-      const status = await $.process.run(['git', '-C', repo, 'status', '--porcelain']).catch(() => null)
-      if (!branch || !status || branch.exitCode !== 0 || status.exitCode !== 0) {
-        continue
-      }
-      const changes = status.stdout.split('\n').filter(l => l !== '').length
-      lines.push(`${hub.name}: \`${repo}\` on ${branch.stdout.trim() || '(detached)'}, ${changes} uncommitted`)
+      owners.set(repo, [...(owners.get(repo) ?? []), hub.name])
     }
   }
+  const git = (repo: string, ...args: string[]) => $.process.run(['git', '-C', repo, ...args]).catch(() => null)
+  const lines = await Promise.all(
+    [...owners].map(async ([repo, hubs]) => {
+      const [branch, status] = await Promise.all([git(repo, 'branch', '--show-current'), git(repo, 'status', '--porcelain')])
+      if (!branch || !status || branch.exitCode !== 0 || status.exitCode !== 0) {
+        return []
+      }
+      const changes = status.stdout.split('\n').filter(l => l !== '').length
 
-  return lines
+      return [`${[...new Set(hubs)].sort().join(', ')}: \`${repo}\` on ${branch.stdout.trim() || '(detached)'}, ${changes} uncommitted`]
+    }),
+  )
+
+  return lines.flat()
 }
 
 async function errorLines($: EngineInterface, c: Context): Promise<string[]> {
@@ -238,14 +240,7 @@ async function errorLines($: EngineInterface, c: Context): Promise<string[]> {
   if (root === null) {
     return []
   }
-  const rows = await errorLogs($, c.kit, root)
-
-  // The row's detail is `<lines> · <last message>`.
-  return rows.map(row => {
-    const [, count = '?', message = ''] = /^(\d+) · (.*)$/s.exec(row.detail) ?? []
-
-    return `\`${row.file}\` (${count} lines): ${message}`
-  })
+  return (await errorLogs($, c.kit, root)).map(l => `\`${l.file}\` (${l.count} lines): ${l.message}`)
 }
 
 async function openLines($: EngineInterface, c: Context): Promise<string[]> {

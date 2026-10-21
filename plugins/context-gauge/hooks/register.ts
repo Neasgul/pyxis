@@ -1,11 +1,22 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
 
 import { settings, statusLine } from './line'
 import type { Language } from './line'
 
+type Shown = { limits: readonly SessionRateLimit[]; window: number | undefined }
+
+// The last figures shown: after a /clear, the windows stay and only the size is unknown.
+const last: Shown = { limits: [], window: undefined }
+
+function show($: EngineInterface, tokens: number | undefined, figures: Shown, threshold: number, language: Language) {
+  last.limits = figures.limits
+  last.window = figures.window
+  $.ui.status(statusLine(tokens, figures.limits, threshold, language, figures.window))
+}
+
 async function showUsage($: EngineInterface, threshold: number, language: Language) {
   const usage = await $.session.usage()
-  $.ui.status(statusLine(usage.context.tokens, usage.rateLimits, threshold, language))
+  show($, usage.context.tokens, { limits: usage.rateLimits, window: usage.context.window }, threshold, language)
 }
 
 export const register: Register = (on, options) => {
@@ -27,8 +38,18 @@ export const register: Register = (on, options) => {
   })
 
   on('session.measure', async ($, e, next) => {
-    $.ui.status(statusLine(e.context.tokens, e.rateLimits, threshold, language))
+    show($, e.context.tokens, { limits: e.rateLimits, window: e.context.window }, threshold, language)
 
     return next(e)
+  })
+
+  // A /clear fires no session.start: without this, the old size would stay until the next response.
+  on('session.end', async ($, e, next) => {
+    const ended = await next(e)
+    if (e.reason === 'clear') {
+      show($, undefined, { ...last }, threshold, language)
+    }
+
+    return ended
   })
 }

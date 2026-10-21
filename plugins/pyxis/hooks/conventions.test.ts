@@ -75,6 +75,21 @@ test('vault option with ~: expanded against HOME', { options: { vault: '~/vault/
   expect(fake.toasts).toEqual([])
 })
 
+test('a missing vault given with ~: the commands name the expanded path', { options: { vault: '~/nowhere/' } }, async ($, on) => {
+  fakeEngine(on, {})
+  await $.session.start(startIn(HOME))
+  for (const command of ['pyxis:vault', 'pyxis:passations']) {
+    const answer = await $.command.run({ command })
+    expect(answer).toEqual({ text: expect.stringContaining(`(${HOME}/nowhere)`) })
+  }
+})
+
+test('the error log stamps its lines in UTC, with a Z', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/.claude/pyxis.json`]: '{ "folders": { "inbox": 3 } }' })
+  await $.session.start(startIn(VAULT))
+  expect(fake.files.get(`${VAULT}/AI/logs/pyxis-errors.log`)?.text).toMatch(/^2026-10-13T10:00:00Z\t/)
+})
+
 test('a conventions problem: one toast, one line in the error log, defaults used', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, { [`${VAULT}/.claude/pyxis.json`]: '{ "folders": { "inbox": 3 } }' })
   await $.session.start(startIn(VAULT))

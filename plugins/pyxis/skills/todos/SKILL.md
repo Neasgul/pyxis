@@ -14,8 +14,8 @@ Write notes in the language of the template, else of the vault's CLAUDE.md, else
 around them. Reply in the user's language.
 
 Read `Open todos` in the block: every `- [ ]` of the daily and hubs folders, overdue first,
-with its note, line and 📅 date. If it is `none`, say so in one line and stop. If the list ends with `- … and N more`, it is
-cut: say so.
+with its note, line and 📅 date. If it is `none`, say so in one line and stop. If the list
+ends with `- … and N more`, it is cut: say so.
 
 Group them by the project tag of their note; read the note if the tag isn't clear from the
 block. For each, show the task, its note and its due date. Flag anything overdue.

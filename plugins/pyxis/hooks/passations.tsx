@@ -5,7 +5,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { Passation } from '../types'
-import { folder, isWithin, loadKit, logLine } from './conventions'
+import { folder, isWithin, listEntries, loadKit, logLine } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { bareField, field, markDone } from './frontmatter'
 import { repoRoot } from './hubs'
@@ -19,17 +19,25 @@ const tokens = atom({ plugin: 'pyxis', key: 'tokens' } as const, null)
 const isThresholdHidden = atom({ plugin: 'pyxis', key: 'isThresholdHidden' } as const, false)
 const isThresholdNoticed = atom({ plugin: 'pyxis', key: 'isThresholdNoticed' } as const, false)
 
-/** The context size last measured in this session; null before a measurement, after a `/clear` or an unsized compaction. */
-export async function contextSize($: EngineInterface): Promise<number | null> {
+/**
+ * The context size last measured in this session, and the threshold for the model's window;
+ * null before a measurement, after a `/clear` or an unsized compaction.
+ */
+export async function contextSize($: EngineInterface): Promise<{ size: number; threshold: number } | null> {
   const measured = await read($, tokens)
 
-  return measured !== null && measured.id === (await $.session.id()) ? measured.size : null
+  return measured !== null && measured.id === (await $.session.id()) ? measured : null
+}
+
+/** The threshold of the last measurement in this session, else the option's. */
+export async function lastThreshold($: EngineInterface, option: number): Promise<number> {
+  return (await contextSize($))?.threshold ?? option
 }
 
 /** Keeps a measurement (null: unknown). Below the threshold, the warning and the notice are armed for the next crossing. */
 export async function recordSize($: EngineInterface, size: number | null, threshold: number) {
   const id = await $.session.id()
-  await update($, tokens, () => (size === null ? null : { id, size }))
+  await update($, tokens, () => (size === null ? null : { id, size, threshold }))
   if (size === null || size < threshold) {
     if (await read($, isThresholdHidden)) {
       await update($, isThresholdHidden, () => false)
@@ -91,7 +99,7 @@ export const thresholdNotice = (size: number, threshold: number, dir: string, se
 async function readFolder($: EngineInterface, kit: Kit, name: string, repo: string | undefined): Promise<Passation[]> {
   const dir = `${folder(kit, 'passations')}/${name}`
   const found: Passation[] = []
-  for (const note of await $.fs.list(dir).catch(() => [])) {
+  for (const note of await listEntries($, dir)) {
     if (note.kind !== 'file' || !note.name.endsWith('.md')) {
       continue
     }
@@ -183,8 +191,8 @@ export async function renderBanner(
   e: RenderInput<'AbovePrompt'>,
   s: Settings,
 ): Promise<RenderElement | undefined> {
-  const size = await contextSize($)
-  const isOver = size !== null && size >= s.threshold && !(await read($, isThresholdHidden))
+  const measured = await contextSize($)
+  const isOver = measured !== null && measured.size >= measured.threshold && !(await read($, isThresholdHidden))
   const list = (await read($, isBannerHidden)) ? [] : await read($, passations)
   if (e.props.hasSurvey || (!isOver && list.length === 0)) {
     return undefined
@@ -196,10 +204,10 @@ export async function renderBanner(
 
   return (
     <Box flexDirection="column">
-      {isOver && size !== null && (
+      {isOver && measured !== null && (
         <Box key="threshold" flexDirection="column">
           <Text color="warning" wrap="truncate-end">
-            {t.over(inK(size), inK(s.threshold))}
+            {t.over(inK(measured.size), inK(measured.threshold))}
           </Text>
           <Box gap={1}>
             <Button

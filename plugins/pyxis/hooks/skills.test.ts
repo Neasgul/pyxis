@@ -285,3 +285,59 @@ test('the block goes with each pyxis skill, not with a lookalike', OPTIONS, asyn
   await $.prompt.submit({ text: '/pyxis:passations' })
   expect(lastContext(fake)).not.toContain('pyxis, for')
 })
+
+test('the sessions folder’s other files are not session notes', OPTIONS, async ($, on) => {
+  const notes: Notes = {
+    ...NOTES,
+    [`${V}/AI/sessions/2026-10-13-zzz.txt`]: 'x',
+    [`${V}/AI/sessions/2026-10-14-later.json`]: 'x',
+  }
+  const fake = fakeEngine(on, notes, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:morning' })
+  expect(facts(fake)).toContain('Newest session note:\n- `AI/sessions/2026-10-13-today.md`')
+
+  await $.prompt.submit({ text: '/pyxis:daily' })
+  expect(facts(fake)).not.toContain('zzz.txt')
+})
+
+test('a repository shared by two hubs: one line naming both, git run once', OPTIONS, async ($, on) => {
+  const notes: Notes = {
+    ...NOTES,
+    [`${V}/Projects/Depot/depot.md`]: '---\nrepos: [~/code/parcels]\n---\n',
+  }
+  const fake = fakeEngine(on, notes, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:morning' })
+
+  expect(facts(fake)).toContain('Repositories of the hubs:\n- depot, parcels: `/home/ada/code/parcels` on main, 2 uncommitted\n')
+  const branches = fake.git.filter(c => c.includes('--show-current') && c[2] === `${HOME}/code/parcels`)
+  expect(branches).toHaveLength(1)
+})
+
+test('an unreadable date: no facts, a line in the error log, the start block kept', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES, {}, GIT)
+  fake.date = 'mardi\n'
+  await $.prompt.submit({ text: '/pyxis:daily' })
+
+  expect(lastContext(fake)).not.toContain('pyxis, for')
+  expect(lastContext(fake)).toContain('Working rules in this vault')
+  expect(fake.files.get(`${V}/AI/logs/pyxis-errors.log`)?.text).toContain("unreadable date: 'mardi'")
+})
+
+test('folders and notes behind symbolic links count as the ones they lead to', OPTIONS, async ($, on) => {
+  const notes: Notes = {
+    ...NOTES,
+    [`${V}/Projects/Linked/linked.md`]: '---\ntags: [project/linked]\n---\n- [ ] through the link\n',
+    [`${V}/Inbox/shared.md`]: ['an idea kept elsewhere', 20],
+  }
+  const fake = fakeEngine(on, notes, {}, GIT)
+  fake.links.add(`${V}/Projects/Linked`)
+  fake.links.add(`${V}/Inbox/shared.md`)
+  await $.prompt.submit({ text: '/pyxis:morning' })
+
+  const block = facts(fake)
+  expect(block).toContain('through the link — `Projects/Linked/linked.md`:4')
+  expect(block).toContain('- `Inbox/shared.md` (20 days)')
+  await $.prompt.submit({ text: '/pyxis:capture une idée' })
+  expect(facts(fake)).toContain('- `Projects/Linked/linked.md` (tags: project/linked)')
+})
+

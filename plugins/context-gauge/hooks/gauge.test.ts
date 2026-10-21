@@ -15,10 +15,11 @@ function engine(on: On, startTokens: number | undefined) {
   })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({
-    value: { context: { tokens: startTokens, window: 1_000_000 }, rateLimits: LIMITS },
+    value: { startedAt: 0, context: { tokens: startTokens, window: 1_000_000 }, rateLimits: LIMITS },
   }))
   on('session.measure', (_$, e) => ({ changed: e.changed }))
   on('session.attach', (_$, e) => ({ clientId: e.clientId }))
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
 
   return { statuses }
 }
@@ -64,3 +65,12 @@ test('the desktop app attaching after start gets the line too', async ($, on) =>
   expect(statuses.length).toBe(before + 1)
   expect(statuses.at(-1)).toBe('ctx 320k / 300k · 5h 34% · 7d 12% · over threshold')
 })
+
+test('after /clear, the size is unknown until the next response; the windows stay', async ($, on) => {
+  const { statuses } = engine(on, 50_000)
+  await $.session.start(start)
+  await $.session.measure(measure(180_000))
+  await $.session.end({ reason: 'clear', sessionId: 'S1', resume: { id: 'S1' } })
+  expect(statuses.at(-1)).toBe('ctx ? / 300k · 5h 34% · 7d 12%')
+})
+

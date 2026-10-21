@@ -3,8 +3,8 @@
 import { atom, read, update } from 'claude-code'
 import type { Color, EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
-import type { Dashboard, DashboardRow, DashboardTodo } from '../types'
-import { folder, loadKit } from './conventions'
+import type { Dashboard, DashboardTodo } from '../types'
+import { folder, listEntries, loadKit } from './conventions'
 import type { Kit, Role, Settings } from './conventions'
 import { bareField, field } from './frontmatter'
 import { daysBetween, text } from './i18n'
@@ -73,13 +73,13 @@ async function grep($: EngineInterface, kit: Kit, pattern: string, folders: (str
     return []
   }
   // Exit code 1: no line. 2: a folder is missing, the others are read anyway.
-  const r = await $.process.run(['grep', '-rnF', '--include=*.md', '-e', pattern, ...existing], { cwd: kit.vault })
+  const r = await $.process.run(['grep', '-RnF', '--include=*.md', '-e', pattern, '--', ...existing], { cwd: kit.vault })
 
   return grepLines(r.stdout)
 }
 
 async function list($: EngineInterface, kit: Kit, relative: string) {
-  return $.fs.list(`${kit.vault}/${relative}`).catch(() => [])
+  return listEntries($, `${kit.vault}/${relative}`)
 }
 
 async function activePassations($: EngineInterface, kit: Kit, root: string) {
@@ -100,9 +100,12 @@ async function activePassations($: EngineInterface, kit: Kit, root: string) {
   return found.sort((a, b) => b.mtimeMs - a.mtimeMs)
 }
 
+/** An error log of the logs folder: its path relative to the vault, how many lines, the last message. */
+export type ErrorLog = { file: string; count: number; message: string }
+
 /** Error logs only (`*-errors.log`): the logs folder holds other output too. */
-export async function errorLogs($: EngineInterface, kit: Kit, root: string): Promise<DashboardRow[]> {
-  const rows: DashboardRow[] = []
+export async function errorLogs($: EngineInterface, kit: Kit, root: string): Promise<ErrorLog[]> {
+  const logs: ErrorLog[] = []
   for (const f of await list($, kit, root)) {
     if (f.kind !== 'file' || f.size === 0 || !f.name.endsWith('-errors.log')) {
       continue
@@ -110,10 +113,22 @@ export async function errorLogs($: EngineInterface, kit: Kit, root: string): Pro
     const lines = (await $.fs.read(`${kit.vault}/${root}/${f.name}`).catch(() => '')).split('\n').filter(l => l.trim())
     // `date<TAB>where<TAB>message`: the last field is the message.
     const message = (lines.at(-1) ?? '').split('\t').at(-1) ?? ''
-    rows.push({ file: `${root}/${f.name}`, detail: `${lines.length} · ${message}` })
+    logs.push({ file: `${root}/${f.name}`, count: lines.length, message })
   }
 
-  return rows
+  return logs
+}
+
+/** The notes of the inbox folder, oldest first. */
+export async function inboxNotes($: EngineInterface, kit: Kit, root: string) {
+  return (await list($, kit, root)).filter(f => f.kind === 'file' && isNote(f.name)).sort((a, b) => a.mtimeMs - b.mtimeMs)
+}
+
+/** The open todos of the daily and hubs folders (relative, null when off), overdue first. */
+export async function openTodos($: EngineInterface, kit: Kit, folders: (string | null)[], today: string): Promise<DashboardTodo[]> {
+  const lines = await grep($, kit, '- [ ]', folders)
+
+  return sortTodos(lines.map(l => todo(l.file, l.line, l.text, today)))
 }
 
 export async function collect($: EngineInterface, kit: Kit): Promise<Dashboard> {
@@ -131,8 +146,7 @@ export async function collect($: EngineInterface, kit: Kit): Promise<Dashboard> 
   const result: Dashboard = { today, time }
 
   if (daily !== null || hubs !== null) {
-    const lines = await grep($, kit, '- [ ]', [daily, hubs])
-    result.todos = sortTodos(lines.map(l => todo(l.file, l.line, l.text, today)))
+    result.todos = await openTodos($, kit, [daily, hubs], today)
   }
   if (daily !== null) {
     const latest = (await list($, kit, daily))
@@ -143,10 +157,7 @@ export async function collect($: EngineInterface, kit: Kit): Promise<Dashboard> 
     result.latestDaily = latest ? { file: `${daily}/${latest}`, days: daysBetweenDates(latest.slice(0, 10), today) } : null
   }
   if (inbox !== null) {
-    result.inbox = (await list($, kit, inbox))
-      .filter(f => f.kind === 'file' && isNote(f.name))
-      .sort((a, b) => a.mtimeMs - b.mtimeMs)
-      .map(f => ({ file: `${inbox}/${f.name}`, detail: t.age(daysBetween(f.mtimeMs, now)) }))
+    result.inbox = (await inboxNotes($, kit, inbox)).map(f => ({ file: `${inbox}/${f.name}`, detail: t.age(daysBetween(f.mtimeMs, now)) }))
   }
   if (kit.verifyTag !== null && (hubs !== null || inbox !== null)) {
     result.toVerify = { tag: kit.verifyTag, notes: countByFile(await grep($, kit, kit.verifyTag, [hubs, inbox])) }
@@ -155,7 +166,7 @@ export async function collect($: EngineInterface, kit: Kit): Promise<Dashboard> 
     result.passations = await activePassations($, kit, passationsRoot)
   }
   if (logs !== null) {
-    result.errors = await errorLogs($, kit, logs)
+    result.errors = (await errorLogs($, kit, logs)).map(l => ({ file: l.file, detail: `${l.count} · ${l.message}` }))
   }
 
   return result

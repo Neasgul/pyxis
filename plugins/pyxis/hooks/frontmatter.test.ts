@@ -48,3 +48,9 @@ test('ages, in both languages', () => {
   expect([0, 1, 5].map(text('fr').age)).toEqual(["aujourd'hui", 'hier', 'il y a 5 j'])
   expect([0, 1, 5].map(text('en').age)).toEqual(['today', 'yesterday', '5 days ago'])
 })
+
+test('listField: a block list without indent, as YAML allows', () => {
+  const note = '---\nrepos:\n- ~/Projects/a\n- ~/Projects/b  # old\nstatus: active\n---\n'
+  expect(listField(note, 'repos')).toEqual(['~/Projects/a', '~/Projects/b'])
+  expect(bareField(note, 'status')).toBe('active')
+})

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, PluginOptions } from 'claude-code'
+import type { EngineInterface, FsEntry, PluginOptions } from 'claude-code'
 
 import { text } from './i18n'
 import type { Language } from './i18n'
@@ -45,6 +45,13 @@ export const DEFAULT_THRESHOLD = 300_000
 const MIN_THRESHOLD = 1_000
 
 export type Settings = { vault: string; language: Language; threshold: number }
+
+/** Share of the model's window the threshold may take: past it, a smaller window would never reach the option. */
+const WINDOW_SHARE = 0.75
+
+/** The threshold for a model's window: the option, or 75% of a window too small for it. */
+export const effectiveThreshold = (threshold: number, window: number | undefined) =>
+  window === undefined ? threshold : Math.min(threshold, Math.round(window * WINDOW_SHARE))
 
 /** The plugin's options, validated: a bad threshold falls back to the default, an unknown language to English. */
 export function settings(options: PluginOptions): Settings {
@@ -197,6 +204,25 @@ export async function loadKit($: EngineInterface, s: Settings): Promise<Kit> {
   }
 }
 
+/**
+ * A folder's entries, a symbolic link counted as what it leads to (`$.fs.list` says `other`);
+ * a broken link stays `other`. Empty when the folder cannot be read.
+ */
+export async function listEntries($: EngineInterface, path: string): Promise<FsEntry[]> {
+  const entries = await $.fs.list(path).catch(() => [])
+
+  return Promise.all(
+    entries.map(async entry => {
+      if (entry.kind !== 'other') {
+        return entry
+      }
+      const target = await $.fs.stat(`${path}/${entry.name}`).catch(() => null)
+
+      return target === null || target.kind === 'other' ? entry : { ...entry, kind: target.kind, size: target.size, mtimeMs: target.mtimeMs }
+    }),
+  )
+}
+
 /** Adds a line to `<logs>/pyxis-errors.log`; does nothing without a logs folder. Never rejects. */
 export async function logLine($: EngineInterface, kit: Kit, where: string, message: string) {
   const logs = kit.isVaultFound ? folder(kit, 'logs') : null
@@ -205,7 +231,7 @@ export async function logLine($: EngineInterface, kit: Kit, where: string, messa
   }
   const path = `${logs}/${LOG_FILE}`
   const before = await $.fs.read(path).catch(() => '')
-  const at = new Date(await $.clock.now()).toISOString().slice(0, 19)
+  const at = `${new Date(await $.clock.now()).toISOString().slice(0, 19)}Z`
   await $.fs.write(path, `${before}${at}\t${where}\t${message.replace(/\s+/g, ' ')}\n`).catch(() => undefined)
 }
 

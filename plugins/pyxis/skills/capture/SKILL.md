@@ -17,8 +17,8 @@ around them. Reply in the user's language.
 Create `<inbox>/<kebab-slug>.md` from what follows. Do not embellish,
 do not research, do not add sections I didn't ask for.
 
-The slug is kebab-case and has no em dash or en dash: `[[…]]` links compare
-the file name as it is.
+The slug is kebab-case, in the language I typed in, and has no em dash or
+en dash: `[[…]]` links compare the file name as it is.
 
 Frontmatter: created (today), tags, status: active.
 

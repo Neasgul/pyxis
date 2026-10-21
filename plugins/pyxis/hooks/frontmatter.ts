@@ -1,5 +1,5 @@
 // A minimal frontmatter reader, as hub-inject.py had: `key: value`, `key: [a, b]` and block
-// lists (`key:` then `  - a`), quotes removed. No YAML library: a mod has no dependencies.
+// lists (`key:` then `  - a` or `- a`), quotes removed. No YAML library: a mod has no dependencies.
 
 /** The frontmatter's lines, without the `---` fences; null without a frontmatter or when it is not closed. */
 function head(text: string): string[] | null {
@@ -33,7 +33,7 @@ export function field(text: string, name: string): string {
 /** A field's value without its YAML comment: `status: archived  # old` is `archived`. */
 export const bareField = (text: string, name: string) => unquote(withoutComment(field(text, name)))
 
-/** A list field, inline (`[a, b]`), as a block (`  - a`) or a single value; comments removed. */
+/** A list field, inline (`[a, b]`), as a block (`  - a`, indented or not) or a single value; comments removed. */
 export function listField(text: string, name: string): string[] {
   const lines = head(text) ?? []
   const i = lines.findIndex(l => l.startsWith(`${name}:`))
@@ -53,7 +53,7 @@ export function listField(text: string, name: string): string[] {
   }
   const items: string[] = []
   for (const line of lines.slice(i + 1)) {
-    const item = /^\s+-\s+(.*)$/.exec(line)
+    const item = /^\s*-\s+(.*)$/.exec(line)
     if (!item) {
       break
     }

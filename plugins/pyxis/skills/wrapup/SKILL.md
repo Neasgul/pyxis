@@ -15,8 +15,9 @@ around them. Reply in the user's language.
 
 The block gives the hubs, this session's hubs, and the error logs of the hooks.
 
-The session transcript is on disk at `~/.claude/projects/*/${CLAUDE_SESSION_ID}.jsonl`. This
-conversation is already in your context: open the file only if a compaction dropped messages
+The session transcript is the file `${CLAUDE_SESSION_ID}.jsonl` in one of the folders of
+`.claude/projects/` in the user's home. This conversation is already in your context: look for
+the file (Glob, the home written out in full) and open it only if a compaction dropped messages
 (reading outside the working directories may need my approval).
 
 Three questions only: did I leave something you asked for unfinished, is
@@ -46,7 +47,7 @@ written twice (one place, link from the others).
 | Nature | Where it goes |
 |---|---|
 | Fact about a project | its hub in the hubs folder |
-| Settled decision | a note as `/pyxis:decision` describes, linked from the hub |
+| Settled decision | a decision note, linked from the hub (below) |
 | Word that should have brought a hub | that hub's `triggers:` |
 | Rule for this vault | the vault's CLAUDE.md |
 | Rule for every project | the user's global CLAUDE.md |
@@ -75,8 +76,8 @@ change in how we work**. Write nothing before I approve.
 ## 5. Apply
 
 Write what I approved and nothing else, following the vault's working rules
-(from pyxis's rules block, or the vault's CLAUDE.md). Then write the session summary in the sessions folder, creating the
-folder if it is absent, as `<today>-<topic-slug>.md`. If the block's `Template:` line names a
+(from pyxis's rules block, or the vault's CLAUDE.md). Then write the session summary in the
+sessions folder, creating the folder if it is absent, as `<today>-<topic-slug>.md`. If the block's `Template:` line names a
 file to follow, follow it and fill its placeholders; never edit the template. If it says
 `Template: none`, use the default format below:
 

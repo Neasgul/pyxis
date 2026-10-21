@@ -59,7 +59,9 @@ project folders.
    I wrote those lines for exactly this moment.
 
 4. Read `Open todos` from the block: it is already sorted and flags what is overdue. List
-   overdue separately from due-today. Don't grep for them.
+   overdue separately from due-today. Todos without a date are not listed: give their count
+   in one line under **Due today** (`+ n without a date`) and draw on them for the three
+   candidates. Don't grep for them.
 
 5. If the vault's CLAUDE.md names a ticket tool and its MCP server is connected,
    list my tickets in progress and flag any whose status changed since yesterday;

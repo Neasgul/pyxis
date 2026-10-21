@@ -2,7 +2,7 @@
 // `triggers:`. Ported from hub-inject.py (spec 2026-09-28-hub-inject-design).
 import type { EngineInterface } from 'claude-code'
 
-import { expandHome, folder, isWithin } from './conventions'
+import { expandHome, folder, isWithin, listEntries } from './conventions'
 import type { Kit } from './conventions'
 import { bareField, isUnclosed, listField } from './frontmatter'
 
@@ -125,7 +125,7 @@ export async function loadHubs($: EngineInterface, kit: Kit): Promise<{ hubs: Hu
   if (root === null) {
     return { hubs: [], problems: [] }
   }
-  const entries = (await $.fs.list(root).catch(() => []))
+  const entries = (await listEntries($, root))
     .filter(e => e.kind === 'dir')
     .sort((a, b) => (a.name < b.name ? -1 : 1))
   const hubs: Hub[] = []

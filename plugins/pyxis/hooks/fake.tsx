@@ -12,7 +12,9 @@ type Note = { text: string; mtimeMs: number }
 export type Fake = {
   /** Absolute path → note. A key ending in `/` is an empty folder. */
   files: Map<string, Note>
+  /** What the plugin ran, git aside. */
   commands: string[][]
+  git: string[][]
   prompts: { text: string; context: readonly string[] }[]
   toasts: string[]
   panes: string[]
@@ -25,6 +27,10 @@ export type Fake = {
   tokensAfter?: number
   /** How many messages `$.session.messages({ as: 'api' })` returns. */
   transcript: number
+  /** What `date +%Y-%m-%d %u` prints, when not the fake's day. */
+  date?: string
+  /** Paths that are symbolic links: listed as `other`, read and stated through. */
+  links: Set<string>
 }
 
 /** `[text, days ago]` for an older note. */
@@ -55,6 +61,7 @@ export function fakeEngine(
   const fake: Fake = {
     files,
     commands: [],
+    git: [],
     prompts: [],
     toasts: [],
     panes: [],
@@ -62,6 +69,7 @@ export function fakeEngine(
     surfaces: [],
     registered: [],
     transcript: 0,
+    links: new Set(),
   }
   const isDir = (path: string) => [...files.keys()].some(k => k.startsWith(`${path}/`))
   const entries = (path: string): FsEntry[] => {
@@ -72,8 +80,8 @@ export function fakeEngine(
       }
       const [name = '', ...rest] = key.slice(path.length + 1).split('/')
       if (name && !found.has(name)) {
-        const kind = rest.length > 0 ? 'dir' : 'file'
-        found.set(name, { name, kind, size: kind === 'file' ? note.text.length : 0, mtimeMs: note.mtimeMs, isLink: false })
+        const kind = fake.links.has(`${path}/${name}`) ? 'other' : rest.length > 0 ? 'dir' : 'file'
+        found.set(name, { name, kind, size: kind === 'file' ? note.text.length : 0, mtimeMs: kind === 'file' ? note.mtimeMs : 0, isLink: false })
       }
     }
 
@@ -81,11 +89,15 @@ export function fakeEngine(
   }
   const grep = (argv: string[], cwd: string) => {
     const pattern = argv[argv.indexOf('-e') + 1] ?? ''
-    const folders = argv.slice(argv.indexOf('-e') + 2)
+    // The folders come after `--`, so that one named like an option stays a folder.
+    const folders = argv.includes('--') ? argv.slice(argv.indexOf('--') + 1) : []
+    // `-r` does not go through the links it meets; `-R` does.
+    const isFollowing = /^-[a-zA-Z]*R/.test(argv[1] ?? '')
+    const throughLink = (key: string) => [...fake.links].some(link => key.startsWith(`${link}/`) || key === link)
     const lines: string[] = []
     for (const [key, note] of [...files].sort(([a], [b]) => (a < b ? -1 : 1))) {
       const relative = key.slice(cwd.length + 1)
-      if (!key.endsWith('.md') || !folders.some(f => isWithin(relative, f))) {
+      if (!key.endsWith('.md') || !folders.some(f => isWithin(relative, f)) || (!isFollowing && throughLink(key))) {
         continue
       }
       note.text.split('\n').forEach((line, i) => {
@@ -129,10 +141,11 @@ export function fakeEngine(
   })
   on('fs.stat', (_$, e) => {
     const note = files.get(e.path)
+    const isLink = fake.links.has(e.path)
     if (note) {
-      return { value: { kind: 'file', size: note.text.length, mtimeMs: note.mtimeMs, isLink: false } }
+      return { value: { kind: 'file', size: note.text.length, mtimeMs: note.mtimeMs, isLink } }
     }
-    return isDir(e.path) ? { value: { kind: 'dir', size: 0, mtimeMs: NOW, isLink: false } } : { deny: `ENOENT: ${e.path}` }
+    return isDir(e.path) ? { value: { kind: 'dir', size: 0, mtimeMs: NOW, isLink } } : { deny: `ENOENT: ${e.path}` }
   })
   on('fs.list', (_$, e) => (isDir(e.path ?? '') ? { value: entries(e.path ?? '') } : { deny: `ENOENT: ${e.path}` }))
   on('fs.read', (_$, e) => {
@@ -147,6 +160,7 @@ export function fakeEngine(
   on('process.run', (_$, e) => {
     const argv = [...e.argv]
     if (argv[0] === 'git') {
+      fake.git.push(argv)
       const subcommand = argv.slice(3).join(' ')
       if (subcommand === 'branch --show-current' || subcommand === 'status --porcelain') {
         const state = git[argv[2] ?? '']
@@ -167,7 +181,7 @@ export function fakeEngine(
       return grep(argv, e.init?.cwd ?? fake.session.cwd)
     }
     if (argv[0] === 'date') {
-      return done(argv[1] === '+%Y-%m-%d %u' ? '2026-10-13 2\n' : '2026-10-13 10:42\n')
+      return done(argv[1] === '+%Y-%m-%d %u' ? (fake.date ?? '2026-10-13 2\n') : '2026-10-13 10:42\n')
     }
     if (argv[0] === 'uname') {
       return done('Darwin\n')
@@ -207,8 +221,8 @@ export function fakeEngine(
 
 export const startIn = (cwd: string) => ({ cwd, surface: 'desktop' as const, isInteractive: true })
 
-export const measured = (tokens: number) => ({
-  context: { tokens, window: 1_000_000 },
+export const measured = (tokens: number, window = 1_000_000) => ({
+  context: { tokens, window },
   rateLimits: [],
   changed: ['context' as const],
 })
