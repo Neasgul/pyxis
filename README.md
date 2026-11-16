@@ -1,6 +1,6 @@
 # pyxis
 
-Claude Code plugins for a second brain kept in an Obsidian vault.
+Claude Code plugins for handing work over between sessions.
 
 ## context-gauge
 
@@ -17,47 +17,39 @@ window is too small for the threshold, the threshold is 75% of the window (150k 
 
 ## pyxis
 
-The mechanisms of a second brain kept in an Obsidian vault:
+Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes
+folder (the `vault` option):
 
 - **Rules.** The first message of each session, and the first after a compaction, carries the
-  vault's folders, the hub rule and, in a session of the vault, its working rules.
-- **Hubs.** Each project has a hub, `<hubs>/<Folder>/<folder in lowercase>.md`, with optional
-  `repos:` and `triggers:` in its frontmatter. A session in one of a hub's repositories gets
-  the hub with its first message; a message naming a hub or one of its triggers gets it too,
-  once per session.
+  notes folder, its folders and the passation rule.
 - **Passations** (handoffs). At start, a banner lists the open ones of the session's
-  repository; "Resume" files the note and resumes it; `/pyxis:passations` shows the banner
-  again. Past the threshold, the model is asked once to write one, as `/pyxis:passation`
-  describes; it is asked again after the context falls back below the threshold. Hiding the
-  warning cancels the request too.
-- **Dashboard.** `/pyxis:vault` opens a pane with the open todos, the latest daily note, the inbox,
-  the notes to verify, the open handoffs and the error logs. It opens by itself in a session
-  of the vault; in a terminal, from 144 columns (110 once asked for). A row opens its note in
-  Obsidian through an `obsidian://` link (`open` on macOS, `xdg-open` elsewhere).
-- **Skills.** Each one gets the vault's folders and what it needs from pyxis when you type it:
-  `/pyxis:capture` (a raw thought into the inbox), `/pyxis:inbox` (triage the inbox note by
-  note), `/pyxis:daily` (write today's note), `/pyxis:morning` (the morning brief),
-  `/pyxis:todos` (open todos, three picks for today), `/pyxis:wrapup` (review the session,
-  write its summary), `/pyxis:decision` (record a settled decision in a hub's folder),
-  `/pyxis:hub` (create or update a project hub), `/pyxis:passation` (hand a task over).
+  repository, and those outside any repository in a session of the notes folder; "Resume"
+  files the note and resumes it; `/pyxis:passations` shows the banner again. Past the
+  threshold, the model is asked once to write one, as `/pyxis:passation` describes; it is
+  asked again after the context falls back below the threshold. Hiding the warning cancels the
+  request too.
+- **Skills.** Each one gets the folders and what it needs from pyxis when you type it:
+  `/pyxis:wrapup` (review the session, propose what to retain and where, write its summary)
+  and `/pyxis:passation` (hand a task over). The wrap-up writes where the rules loaded in the
+  session say, and names the rule behind each destination; without one, a fact stays in the
+  session summary.
 
-Options: `vault` (the vault's folder, required), `language` (`en` or `fr`) and `threshold`
+Removed in 0.3.0: project hubs, the dashboard, and the capture, inbox, hub, decision, daily,
+morning and todos skills.
+
+Options: `vault` (the notes folder, required), `language` (`en` or `fr`) and `threshold`
 (tokens, 300k by default, 75% of the model's window when that is smaller).
 
 ### Conventions
 
-`<vault>/.claude/pyxis.json` names the vault's folders, relative to the vault. Every key is
+`<vault>/.claude/pyxis.json` names the folders, relative to the notes folder. Every key is
 optional and falls back to the default below; `null` turns off what depends on a folder (no
-`daily`: no daily section in the dashboard). A key that is unknown or of the wrong type keeps
-its default, and pyxis says so once.
+`passations`: no handoffs). A key that is unknown or of the wrong type keeps its default, and
+pyxis says so once.
 
 ```json
 {
   "folders": {
-    "inbox": "Inbox",
-    "hubs": "Projects",
-    "archive": "Archive",
-    "daily": "Daily",
     "templates": "Templates",
     "sessions": "AI/sessions",
     "logs": "AI/logs"
@@ -66,19 +58,16 @@ its default, and pyxis says so once.
     "folder": "AI/passations",
     "outsideRepo": "no-repo",
     "resumed": "resumed"
-  },
-  "verifyTag": "#todo/verify"
+  }
 }
 ```
 
-When the templates folder holds `daily.md`, `session.md`, `decision.md`, `hub.md` or
-`passation.md`, the matching skills follow it.
+When the templates folder holds `session.md` or `passation.md`, the matching skill follows it.
 
-pyxis never edits a note beyond what its banner, its dashboard and its skills do, and needs nothing but Claude
+pyxis never edits a note beyond what its banner and its skills do, and needs nothing but Claude
 Code.
 
-The rules and the hubs go with your messages, so subagents never get them: keep your working
-rules in the vault's `CLAUDE.md` too, and the hub rule in your own `~/.claude/CLAUDE.md`.
+The rules go with your messages, so subagents never get them.
 
 Where an organisation manages Claude Code, some events never reach a user plugin. pyxis does
 without them: its blocks go with your messages, and a compaction is told by the conversation

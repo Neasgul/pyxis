@@ -50,7 +50,7 @@ session: <the session id pyxis gives>
 ## Read first
 ```
 
-Add a ticket field when the vault's CLAUDE.md names a ticket tool and the task has a ticket.
+Add a ticket field when the session's rules name a ticket tool and the task has a ticket.
 
 ## Content
 

@@ -3,7 +3,7 @@
   "owner": {
     "name": "Neasgul"
   },
-  "description": "Claude Code plugins for a second brain kept in an Obsidian vault.",
+  "description": "Claude Code plugins for handing work over between sessions.",
   "plugins": [
     {
       "name": "context-gauge",
@@ -13,7 +13,7 @@
     {
       "name": "pyxis",
       "source": "./plugins/pyxis",
-      "description": "A second brain in an Obsidian vault: project hubs, handoffs between sessions, working rules and a vault dashboard."
+      "description": "Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes folder."
     }
   ]
 }

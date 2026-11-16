@@ -8,29 +8,23 @@ import type { Language } from './i18n'
 const reported = atom({ plugin: 'pyxis', key: 'reported' } as const, [])
 const toasted = atom({ plugin: 'pyxis', key: 'toasted' } as const, [])
 
-export type Role = 'inbox' | 'hubs' | 'archive' | 'daily' | 'templates' | 'sessions' | 'logs'
+export type Role = 'templates' | 'sessions' | 'logs'
 
-export const ROLES: readonly Role[] = ['inbox', 'hubs', 'archive', 'daily', 'templates', 'sessions', 'logs']
+export const ROLES: readonly Role[] = ['templates', 'sessions', 'logs']
 
 /** The vault's folders by role, relative to the vault; null turns off what depends on one. */
 export type Conventions = {
   folders: Record<Role, string | null>
   passations: { folder: string | null; outsideRepo: string; resumed: string }
-  verifyTag: string | null
 }
 
 export const DEFAULT_CONVENTIONS: Conventions = {
   folders: {
-    inbox: 'Inbox',
-    hubs: 'Projects',
-    archive: 'Archive',
-    daily: 'Daily',
     templates: 'Templates',
     sessions: 'AI/sessions',
     logs: 'AI/logs',
   },
   passations: { folder: 'AI/passations', outsideRepo: 'no-repo', resumed: 'resumed' },
-  verifyTag: '#todo/verify',
 }
 
 /** Relative to the vault. */
@@ -73,7 +67,6 @@ const isFolder = (v: unknown): v is string =>
   typeof v === 'string' && v.trim() !== '' && !/^[/~]/.test(v) && !v.split('/').includes('..')
 // A single folder name: `hors-depot`, `reprises`.
 const isName = (v: unknown): v is string => typeof v === 'string' && /^[^/]+$/.test(v) && v !== '.' && v !== '..'
-const isTag = (v: unknown): v is string => typeof v === 'string' && /^\S+$/.test(v)
 const trimSlash = (path: string) => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
 /**
@@ -122,7 +115,7 @@ export function parseConventions(raw: string | null): { conventions: Conventions
     return value
   }
 
-  problems.push(...Object.keys(json).filter(k => !['folders', 'passations', 'verifyTag'].includes(k)))
+  problems.push(...Object.keys(json).filter(k => !['folders', 'passations'].includes(k)))
   const folders = section('folders', ROLES)
   const passations = section('passations', ['folder', 'outsideRepo', 'resumed'])
   const folderOrNull = (v: unknown) => v === null || isFolder(v)
@@ -139,7 +132,6 @@ export function parseConventions(raw: string | null): { conventions: Conventions
         outsideRepo: take(passations, 'outsideRepo', 'passations.outsideRepo', isName, defaults.passations.outsideRepo),
         resumed: take(passations, 'resumed', 'passations.resumed', isName, defaults.passations.resumed),
       },
-      verifyTag: take(json, 'verifyTag', 'verifyTag', v => v === null || isTag(v), defaults.verifyTag),
     },
     problems,
   }
@@ -166,7 +158,7 @@ export function folder(kit: Kit, role: Role | 'passations'): string | null {
 }
 
 /** Folders read, never written by pyxis: absent from disk, the model is not told of them. */
-const READ_ONLY: readonly Role[] = ['inbox', 'hubs', 'archive', 'daily', 'templates']
+const READ_ONLY: readonly Role[] = ['templates']
 
 /** The kit with the read-only folders absent from disk turned off; sessions and logs are made on first write. */
 export async function onDisk($: EngineInterface, kit: Kit): Promise<Kit> {

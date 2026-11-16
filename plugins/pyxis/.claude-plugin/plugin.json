@@ -1,14 +1,14 @@
 {
   "name": "pyxis",
-  "version": "0.2.0",
-  "description": "A second brain in an Obsidian vault: project hubs, handoffs between sessions, working rules and a vault dashboard.",
+  "version": "0.3.0",
+  "description": "Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes folder.",
   "author": { "name": "Neasgul" },
   "types": "./types/index.d.ts",
   "userConfig": {
     "vault": {
       "type": "directory",
       "title": "Vault",
-      "description": "The Obsidian vault's folder.",
+      "description": "The notes folder that holds the handoffs, the session summaries and the logs.",
       "required": true
     },
     "language": {

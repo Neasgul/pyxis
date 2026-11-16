@@ -238,11 +238,5 @@ export const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 10 }, view: {} },
 } as const
 
-export const PANE_PROPS = {
-  component: 'Pane',
-  requestId: 'pyxis-vault',
-  props: { title: 'Vault', isFocused: false, bodyColumns: 90, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
-} as const
-
 /** The context the model read with the last prompt, joined. */
 export const lastContext = (fake: Fake) => (fake.prompts.at(-1)?.context ?? []).join('\n\n')

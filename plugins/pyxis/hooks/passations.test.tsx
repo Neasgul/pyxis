@@ -4,13 +4,11 @@ import type { Engine } from 'claude-code/testing'
 
 import { BAND, COMPACT, HOME, VAULT, fakeEngine, lastContext, measured, startIn } from './fake'
 import type { Notes } from './fake'
-import { hubsForRoots } from './hubs'
 
 const OPTIONS = { options: { vault: VAULT, language: 'fr' } }
 const PASSATIONS = `${VAULT}/AI/passations`
 const OUTSIDE = `${PASSATIONS}/hors-depot`
 const OTTER = `${HOME}/Projects/otterbackend`
-// A repository without a hub: its handoffs come from it alone.
 const SAMPLE = `${HOME}/Projects/Android_App_Sample`
 const REPOS = { [OTTER]: OTTER, [SAMPLE]: SAMPLE, [`${SAMPLE}/.claude/worktrees/v2`]: SAMPLE }
 
@@ -29,13 +27,7 @@ const VAULT_NOTES: Notes = {
 
 const banner = ($: Engine, surface: 'terminal' | 'desktop' = 'desktop') => $.ui.mount({ plugin: 'pyxis', surface, ...BAND })
 
-test('hubsForRoots: a repository holds its subfolders, not a folder sharing its prefix', () => {
-  const hubs = [{ name: 'otter', path: '', text: '', repos: [OTTER], triggers: [] }]
-  expect(hubsForRoots(hubs, [`${OTTER}/apps/accounts`]).map(h => h.name)).toEqual(['otter'])
-  expect(hubsForRoots(hubs, [`${OTTER}-copie`])).toEqual([])
-})
-
-test('in the vault: the handoffs outside repositories, until a hub is cited', OPTIONS, async ($, on) => {
+test('in the vault: the handoffs outside repositories', OPTIONS, async ($, on) => {
   fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(VAULT))
 
@@ -50,26 +42,37 @@ test('in the vault: the handoffs outside repositories, until a hub is cited', OP
   }
 })
 
-test('a hub cited in a message adds its repositories’ handoffs to /passations', OPTIONS, async ($, on) => {
-  fakeEngine(on, VAULT_NOTES, REPOS)
-  await $.session.start(startIn(VAULT))
-  await $.prompt.submit({ text: 'Où en est la revue de sécurité côté Verbena ?' })
-
-  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
-    text: '2 passation(s) en cours (hors dépôt, otter), au-dessus de la zone de saisie.',
-  })
-  const ui = await banner($)
-  expect(await ui.find({ key: 'resume:hors-depot/kit-vault-victoire.md' })).toBeDefined()
-  expect(await ui.find({ key: 'resume:otterbackend/refonte-design.md' })).toBeDefined()
-})
-
-test('in a repository: its hub’s handoffs from the start, not those outside repositories', OPTIONS, async ($, on) => {
+test('in a repository: its own handoffs from the start, not those outside repositories', OPTIONS, async ($, on) => {
   fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(`${OTTER}/otter/home`))
 
   const ui = await banner($)
   expect(await ui.find({ key: 'resume:otterbackend/refonte-design.md' })).toBeDefined()
   expect(await ui.find({ key: 'resume:hors-depot/kit-vault-victoire.md' })).toBeUndefined()
+})
+
+test('a message naming a hub or its trigger brings neither the hub nor its handoffs', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'Où en est la revue de sécurité côté Verbena, sur otter ?' })
+
+  expect(lastContext(fake)).not.toContain('Projects/Otter/otter.md')
+  expect(lastContext(fake)).not.toContain('## Purpose')
+  expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
+    text: '1 passation(s) en cours (hors dépôt), au-dessus de la zone de saisie.',
+  })
+  expect(await (await banner($)).find({ key: 'resume:otterbackend/refonte-design.md' })).toBeUndefined()
+})
+
+test('after a compaction the start block goes again, with no hub', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
+  await $.session.start(startIn(OTTER))
+  await $.prompt.submit({ text: 'bonjour' })
+  await $.session.compact(COMPACT)
+  await $.prompt.submit({ text: 'suite' })
+
+  expect(lastContext(fake)).toContain('pyxis: ')
+  expect(lastContext(fake)).not.toContain('## Purpose')
 })
 
 test('“Resume” marks the note done, moves it to reprises/ and submits the resumption', OPTIONS, async ($, on) => {
@@ -104,21 +107,6 @@ test('a note already in reprises/ under that name: the moved one gets a suffix',
   expect(fake.files.get(`${OUTSIDE}/reprises/kit-vault-victoire.md`)?.text).toContain('Older.')
 })
 
-test('resuming a repository’s handoff from the vault says so', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, VAULT_NOTES, REPOS)
-  await $.session.start(startIn(VAULT))
-  await $.prompt.submit({ text: 'otter' })
-  await $.command.run({ command: 'pyxis:passations' })
-  await (await banner($)).press({ key: 'resume:otterbackend/refonte-design.md' })
-
-  expect(fake.commands.at(-1)).toEqual([
-    'mv',
-    `${PASSATIONS}/otterbackend/refonte-design.md`,
-    `${PASSATIONS}/otterbackend/reprises/refonte-design.md`,
-  ])
-  expect(fake.prompts.at(-1)?.text).toContain(`Elle concerne le dépôt \`${OTTER}\``)
-})
-
 test('the first message hides the banner, /passations shows it again', OPTIONS, async ($, on) => {
   fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(VAULT))
@@ -131,7 +119,7 @@ test('the first message hides the banner, /passations shows it again', OPTIONS, 
   expect(await (await banner($)).find({ key: 'resume:hors-depot/kit-vault-victoire.md' })).toBeDefined()
 })
 
-test('in a repository without a hub, from a worktree: its handoffs, at start and with /passations', OPTIONS, async ($, on) => {
+test('in a repository, from a worktree: its handoffs, at start and with /passations', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(`${SAMPLE}/.claude/worktrees/v2`))
 
@@ -152,15 +140,15 @@ test('in a repository without a hub, from a worktree: its handoffs, at start and
   expect(fake.prompts.at(-1)?.text).not.toContain('concerne le dépôt')
 })
 
-test('a hub’s repository is not named twice in /passations', OPTIONS, async ($, on) => {
+test('/pyxis:passations names the session’s repository once', OPTIONS, async ($, on) => {
   fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(OTTER))
   expect(await $.command.run({ command: 'pyxis:passations' })).toEqual({
-    text: '2 passation(s) en cours (hors dépôt, otter), au-dessus de la zone de saisie.',
+    text: '2 passation(s) en cours (hors dépôt, otterbackend), au-dessus de la zone de saisie.',
   })
 })
 
-test('outside the vault, any repository and any hub: no banner, no list for the model', OPTIONS, async ($, on) => {
+test('outside the vault and any repository: no banner, no list for the model', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, VAULT_NOTES, REPOS)
   await $.session.start(startIn(`${HOME}/Downloads`))
   expect(await (await banner($)).find({ key: 'engine' })).toBeDefined()

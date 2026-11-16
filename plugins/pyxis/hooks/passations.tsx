@@ -5,10 +5,9 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, RenderElement, RenderInput } from 'claude-code'
 
 import type { Passation } from '../types'
-import { folder, isWithin, listEntries, loadKit, logLine } from './conventions'
+import { folder, listEntries, loadKit, logLine } from './conventions'
 import type { Kit, Settings } from './conventions'
 import { bareField, field, markDone } from './frontmatter'
-import { repoRoot } from './hubs'
 import { daysBetween, text } from './i18n'
 import { passationSkill } from './rules'
 
@@ -96,7 +95,7 @@ export const thresholdNotice = (size: number, threshold: number, dir: string, se
   `Session context: ${inK(size)} tokens, past the threshold of ${inK(threshold)}. Handle the request, then write the passation without asking, in \`${dir}/<task-slug>.md\` (session \`${sessionId}\`), as \`${passationSkill(pluginRoot)}\` says, and end the message with one line inviting the user to resume in a new session.`
 
 /** The `status: active` notes of one folder of the passations folder. */
-async function readFolder($: EngineInterface, kit: Kit, name: string, repo: string | undefined): Promise<Passation[]> {
+async function readFolder($: EngineInterface, kit: Kit, name: string): Promise<Passation[]> {
   const dir = `${folder(kit, 'passations')}/${name}`
   const found: Passation[] = []
   for (const note of await listEntries($, dir)) {
@@ -113,7 +112,6 @@ async function readFolder($: EngineInterface, kit: Kit, name: string, repo: stri
       name: note.name.replace(/\.md$/, ''),
       description: field(content, 'description'),
       mtimeMs: note.mtimeMs,
-      ...(repo ? { repo } : {}),
     })
   }
 
@@ -130,18 +128,10 @@ export async function openPassations(
   if (folder(kit, 'passations') === null) {
     return []
   }
-  const sources = new Map<string, string | undefined>()
-  if (withOutsideRepo) {
-    sources.set(kit.passations.outsideRepo, undefined)
-  }
-  for (const repo of repos) {
-    if (!sources.has(repoFolder(repo))) {
-      sources.set(repoFolder(repo), repo)
-    }
-  }
+  const names = new Set([...(withOutsideRepo ? [kit.passations.outsideRepo] : []), ...repos.map(repoFolder)])
   const found: Passation[] = []
-  for (const [name, repo] of sources) {
-    found.push(...(await readFolder($, kit, name, repo)))
+  for (const name of names) {
+    found.push(...(await readFolder($, kit, name)))
   }
 
   return found.sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -171,17 +161,11 @@ async function resume($: EngineInterface, s: Settings, p: Passation) {
   await $.process.run(['mkdir', '-p', resumedDir])
   const moved = await $.process.run(['mv', source, target])
 
-  const cwd = await $.session.cwd()
-  const root = await repoRoot($, cwd)
-  const repo = p.repo
-  const isElsewhere = repo !== undefined && ![cwd, ...(root ? [root] : [])].some(r => isWithin(r, repo))
-  const elsewhere = isElsewhere ? ` ${t.elsewhere(repo)}` : ''
-
   if (moved.exitCode === 0) {
-    void $.prompt.submit({ text: t.resumeMoved(target, kit.passations.resumed) + elsewhere })
+    void $.prompt.submit({ text: t.resumeMoved(target, kit.passations.resumed) })
   } else {
     $.ui.toast(t.moveFailed(moved.stderr.trim()))
-    void $.prompt.submit({ text: t.resumeNotMoved(source, kit.passations.resumed) + elsewhere })
+    void $.prompt.submit({ text: t.resumeNotMoved(source, kit.passations.resumed) })
   }
 }
 

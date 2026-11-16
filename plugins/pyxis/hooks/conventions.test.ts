@@ -16,14 +16,11 @@ test('conventions: no file, the defaults; each key over its default', () => {
   expect(parseConventions(null)).toEqual({ conventions: DEFAULT_CONVENTIONS, problems: [] })
 
   const { conventions, problems } = parseConventions(
-    JSON.stringify({ passations: { outsideRepo: 'hors-depot', resumed: 'reprises' }, folders: { daily: null, inbox: 'A-trier/' } }),
+    JSON.stringify({ passations: { outsideRepo: 'hors-depot', resumed: 'reprises' }, folders: { templates: null, sessions: 'IA/sessions/' } }),
   )
   expect(problems).toEqual([])
   expect(conventions.passations).toEqual({ folder: 'AI/passations', outsideRepo: 'hors-depot', resumed: 'reprises' })
-  expect(conventions.folders.daily).toBeNull()
-  expect(conventions.folders.inbox).toBe('A-trier')
-  expect(conventions.folders.hubs).toBe('Projects')
-  expect(conventions.verifyTag).toBe('#todo/verify')
+  expect(conventions.folders).toEqual({ templates: null, sessions: 'IA/sessions', logs: 'AI/logs' })
 })
 
 test('conventions: unreadable JSON, wrong types and unknown keys keep the defaults and are named', () => {
@@ -33,27 +30,38 @@ test('conventions: unreadable JSON, wrong types and unknown keys keep the defaul
   const { conventions, problems } = parseConventions(
     JSON.stringify({
       floders: {},
-      folders: { inbox: 3, hubs: '/abs/Projects', archive: '../Archive', templates: '', daily: 'Journal', extra: 'x' },
+      folders: { sessions: 3, logs: '/abs/logs', templates: '../T', extra: 'x' },
       passations: { outsideRepo: 'a/b', resumed: '..' },
-      verifyTag: 'two words',
     }),
   )
   expect(problems.sort()).toEqual(
-    [
-      'floders',
-      'folders.archive',
-      'folders.extra',
-      'folders.hubs',
-      'folders.inbox',
-      'folders.templates',
-      'passations.outsideRepo',
-      'passations.resumed',
-      'verifyTag',
-    ].sort(),
+    ['floders', 'folders.extra', 'folders.logs', 'folders.sessions', 'folders.templates', 'passations.outsideRepo', 'passations.resumed'].sort(),
   )
-  expect(conventions.folders).toEqual({ ...DEFAULT_CONVENTIONS.folders, daily: 'Journal' })
-  expect(conventions.passations).toEqual(DEFAULT_CONVENTIONS.passations)
-  expect(conventions.verifyTag).toBe('#todo/verify')
+  expect(conventions).toEqual(DEFAULT_CONVENTIONS)
+})
+
+test('conventions: keys removed in 0.3.0 are named once and ignored', () => {
+  const { conventions, problems } = parseConventions('{"folders":{"hubs":"Projects","daily":"Daily"},"verifyTag":"#x"}')
+  expect(problems).toEqual(['verifyTag', 'folders.hubs', 'folders.daily'])
+  expect(conventions).toEqual(DEFAULT_CONVENTIONS)
+})
+
+test('a vault of 0.2.0 with removed keys: one toast, one log line each, the rest works', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, {
+    [`${VAULT}/.claude/pyxis.json`]: '{"folders":{"hubs":"Projects","inbox":"Inbox"},"verifyTag":"#x"}',
+    [`${VAULT}/AI/passations/no-repo/a.md`]: '---\nstatus: active\ndescription: a\n---\n',
+  })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'hello' })
+  await $.prompt.submit({ text: 'again' })
+
+  expect(fake.toasts).toHaveLength(1)
+  for (const key of ['verifyTag', 'folders.hubs', 'folders.inbox']) {
+    expect(fake.toasts[0]).toContain(`${key} ignored`)
+  }
+  const log = fake.files.get(`${VAULT}/AI/logs/pyxis-errors.log`)?.text ?? ''
+  expect(log.trim().split('\n')).toHaveLength(3)
+  expect(fake.prompts[0]?.context.join('\n')).toContain('no-repo/a.md')
 })
 
 test('vault not found: one toast naming where to set the option, nothing else', OPTIONS, async ($, on) => {
@@ -78,7 +86,7 @@ test('vault option with ~: expanded against HOME', { options: { vault: '~/vault/
 test('a missing vault given with ~: the commands name the expanded path', { options: { vault: '~/nowhere/' } }, async ($, on) => {
   fakeEngine(on, {})
   await $.session.start(startIn(HOME))
-  for (const command of ['pyxis:vault', 'pyxis:passations']) {
+  for (const command of ['pyxis:passations']) {
     const answer = await $.command.run({ command })
     expect(answer).toEqual({ text: expect.stringContaining(`(${HOME}/nowhere)`) })
   }

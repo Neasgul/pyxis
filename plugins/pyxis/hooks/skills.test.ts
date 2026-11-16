@@ -9,51 +9,40 @@ import type { SkillFacts } from './skills'
 const OPTIONS = { options: { vault: VAULT } }
 const V = VAULT
 const NOTES: Notes = {
-  [`${V}/Inbox/old-idea.md`]: ['---\ncreated: 2026-10-04\n---\nan old idea', 9],
-  [`${V}/Inbox/new-idea.md`]: ['---\ncreated: 2026-10-12\n---\na new idea', 1],
   [`${V}/Projects/Parcels/parcels.md`]: '---\ntags: [project/parcels]\nrepos:\n  - ~/code/parcels\n---\n- [ ] ship it 📅 2026-10-10\n',
-  [`${V}/Daily/2026-10-12.md`]: '- [ ] call otter\n',
-  [`${V}/Daily/2026-10-13.md`]: '## Today\n',
   [`${V}/AI/sessions/2026-10-12-before.md`]: 'x',
   [`${V}/AI/sessions/2026-10-13-today.md`]: 'x',
   [`${V}/AI/logs/pyxis-errors.log`]: '2026-10-13T09:00\thubs\tbad repos\n',
   [`${V}/AI/passations/parcels/`]: '',
-  [`${V}/Templates/daily.md`]: '## Today\n',
-  [`${V}/Archive/`]: '',
+  [`${V}/Templates/passation.md`]: '## Task\n',
 }
 const GIT = { [`${HOME}/code/parcels`]: { branch: 'main', changes: 2 } }
 
 const FACTS: SkillFacts = {
-  skill: 'daily',
+  skill: 'passation',
   vault: V,
   today: '2026-10-13',
   weekday: 'Tuesday',
   sessionId: 'S1',
-  verifyTag: '#todo/verify',
-  isVaultSession: true,
   folders: [
-    { role: 'inbox', path: 'Inbox' },
-    { role: 'hubs', path: 'Projects' },
-    { role: 'archive', path: 'Archive' },
-    { role: 'daily', path: 'Daily' },
     { role: 'templates', path: 'Templates' },
     { role: 'sessions', path: 'AI/sessions' },
     { role: 'logs', path: 'AI/logs' },
     { role: 'passations', path: 'AI/passations' },
   ],
-  template: { path: 'Templates/daily.md', isPresent: true },
+  template: { path: 'Templates/passation.md', isPresent: true },
   missing: [],
-  lists: [{ title: 'Previous daily note', lines: ['`Daily/2026-10-12.md`'] }],
+  lists: [{ title: 'Write it in', lines: ['`/home/ada/vault/AI/passations/no-repo`'] }],
 }
 
 /** What the facts block says, without the start block that goes with a session's first message. */
 const facts = (fake: Parameters<typeof lastContext>[0]) => lastContext(fake).slice(lastContext(fake).indexOf('pyxis, for'))
 
-test('skillOf: a real pyxis skill at the start of the message, nothing that looks like one', () => {
-  expect(skillOf('/pyxis:capture une idée')).toBe('capture')
-  expect(skillOf('  /pyxis:daily')).toBe('daily')
-  expect(skillOf('/pyxis:passation')).toBe('passation')
-  for (const message of ['/pyxis:passations', '/pyxis:vault', '/pyxis:hubs', 'pyxis:capture', '/capture', 'parle-moi de /pyxis:capture']) {
+test('skillOf: wrapup and passation at the start of the message, nothing else', () => {
+  expect(skillOf('/pyxis:wrapup')).toBe('wrapup')
+  expect(skillOf('  /pyxis:passation')).toBe('passation')
+  const removed = ['/pyxis:capture une idée', '/pyxis:inbox', '/pyxis:daily', '/pyxis:morning', '/pyxis:todos', '/pyxis:decision x', '/pyxis:hub x']
+  for (const message of [...removed, '/pyxis:passations', '/pyxis:vault', 'pyxis:wrapup', '/wrapup', 'parle-moi de /pyxis:wrapup']) {
     expect(skillOf(message)).toBeNull()
   }
 })
@@ -61,35 +50,34 @@ test('skillOf: a real pyxis skill at the start of the message, nothing that look
 test('factsBlock: the text the skills rely on', () => {
   expect(factsBlock(FACTS)).toBe(
     [
-      'pyxis, for `/pyxis:daily`: vault `/home/ada/vault`, today Tuesday 2026-10-13, session id `S1`.',
-      'Folders, relative to the vault: inbox `Inbox`, hubs `Projects`, archive `Archive`, daily `Daily`, templates `Templates`, sessions `AI/sessions`, logs `AI/logs`, passations `AI/passations`.',
-      'Verify tag: `#todo/verify`.',
-      'Template: `Templates/daily.md`, follow it.',
-      'Previous daily note:',
-      '- `Daily/2026-10-12.md`',
+      'pyxis, for `/pyxis:passation`: vault `/home/ada/vault`, today Tuesday 2026-10-13, session id `S1`.',
+      'Folders, relative to the vault: templates `Templates`, sessions `AI/sessions`, logs `AI/logs`, passations `AI/passations`.',
+      'Template: `Templates/passation.md`, follow it.',
+      'Write it in:',
+      '- `/home/ada/vault/AI/passations/no-repo`',
     ].join('\n'),
   )
 })
 
-test('factsBlock: the template line says what is missing, and is left out for a skill without a model', () => {
+test('factsBlock: the template line says what is missing', () => {
   const absent = factsBlock({ ...FACTS, skill: 'wrapup', template: { path: 'Templates/session.md', isPresent: false }, lists: [] })
   expect(absent).toContain("Template: none (`Templates/session.md` absent): use the skill's default format.")
   expect(factsBlock({ ...FACTS, skill: 'wrapup', template: null, lists: [] })).toContain("Template: none: use the skill's default format.")
-  expect(factsBlock({ ...FACTS, skill: 'inbox', template: null, lists: [] })).not.toContain('Template:')
 })
 
 test('factsBlock: a missing folder is said once, with its path and the way out, and no list', () => {
-  const absent = factsBlock({ ...FACTS, missing: [{ role: 'daily', path: 'Daily' }], lists: [] })
+  const absent = factsBlock({ ...FACTS, skill: 'wrapup', missing: [{ role: 'sessions', path: 'AI/sessions' }], lists: [] })
   expect(absent).toContain(
-    'Missing: the daily folder (`Daily`) is absent: create it or change it in `.claude/pyxis.json`; say so in one line and stop.',
+    'Missing: the sessions folder (`AI/sessions`) is absent: create it or change it in `.claude/pyxis.json`; say so in one line and stop.',
   )
-  const off = factsBlock({ ...FACTS, missing: [{ role: 'daily', path: null }], lists: [] })
-  expect(off).toContain('Missing: the daily folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
+  const off = factsBlock({ ...FACTS, skill: 'wrapup', missing: [{ role: 'sessions', path: null }], lists: [] })
+  expect(off).toContain('Missing: the sessions folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
 })
 
 test('skillOfSubmission: the engine’s command name first, the text as a fallback', () => {
-  expect(skillOfSubmission({ text: 'whatever the engine rendered', command: { name: 'pyxis:daily', args: '' } })).toBe('daily')
-  expect(skillOfSubmission({ text: '/pyxis:capture une idée' })).toBe('capture')
+  expect(skillOfSubmission({ text: 'whatever the engine rendered', command: { name: 'pyxis:wrapup', args: '' } })).toBe('wrapup')
+  expect(skillOfSubmission({ text: '/pyxis:passation' })).toBe('passation')
+  expect(skillOfSubmission({ text: 'hello', command: { name: 'pyxis:capture', args: '' } })).toBeNull()
   expect(skillOfSubmission({ text: 'hello', command: { name: 'pyxis:vault', args: '' } })).toBeNull()
   expect(skillOfSubmission({ text: 'hello', command: { name: 'compact', args: '' } })).toBeNull()
   expect(skillOfSubmission({ text: 'hello' })).toBeNull()
@@ -97,74 +85,32 @@ test('skillOfSubmission: the engine’s command name first, the text as a fallba
 
 test('lists are capped: 30 lines, then how many more', () => {
   const lines = Array.from({ length: 35 }, (_, i) => `\`n${i}.md\``)
-  const block = factsBlock({ ...FACTS, lists: [{ title: 'Inbox, oldest first', lines }] })
+  const block = factsBlock({ ...FACTS, lists: [{ title: 'Open passations there', lines }] })
   expect(block).toContain('- `n29.md`\n- … and 5 more')
   expect(block).not.toContain('n30.md')
   expect(block.split('\n').filter(l => l.startsWith('- '))).toHaveLength(31)
 })
 
-test('daily: its model, today’s note, the previous one and the sessions of today', OPTIONS, async ($, on) => {
+test('wrapup: the error logs and no hub', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:daily' })
-
-  const block = facts(fake)
-  expect(block).toContain('Template: `Templates/daily.md`, follow it.')
-  expect(block).toContain('- `Daily/2026-10-13.md` (exists)')
-  expect(block).toContain('Previous daily note:\n- `Daily/2026-10-12.md`')
-  expect(block).toContain('Session notes of today:\n- `AI/sessions/2026-10-13-today.md`')
-  expect(block).not.toContain('2026-10-12-before.md')
-})
-
-test('morning: the newest session note is the latest date, then the latest modification, not the last name', OPTIONS, async ($, on) => {
-  const notes: Notes = {
-    ...NOTES,
-    [`${V}/AI/sessions/2026-10-13-aaa.md`]: 'x',
-    [`${V}/AI/sessions/2026-10-13-zzz.md`]: ['x', 1],
-    [`${V}/AI/sessions/2026-10-13-today.md`]: ['x', 2],
-  }
-  const fake = fakeEngine(on, notes, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:morning' })
-
-  expect(facts(fake)).toContain('Newest session note:\n- `AI/sessions/2026-10-13-aaa.md`')
-})
-
-test('morning: todos overdue first, the hubs’ repositories, the inbox oldest first', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, NOTES, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:morning' })
-
-  const block = facts(fake)
-  const shipIt = block.indexOf('ship it — `Projects/Parcels/parcels.md`:6 (overdue, 📅 2026-10-10)')
-  expect(shipIt).toBeGreaterThan(-1)
-  expect(block.indexOf('call otter — `Daily/2026-10-12.md`:1')).toBeGreaterThan(shipIt)
-  expect(block).toContain('parcels: `/home/ada/code/parcels` on main, 2 uncommitted')
-  expect(block).toContain('Newest session note:\n- `AI/sessions/2026-10-13-today.md`')
-  const inbox = block.slice(block.indexOf('Inbox, oldest first:'))
-  expect(inbox.indexOf('old-idea.md')).toBeGreaterThan(-1)
-  expect(inbox.indexOf('new-idea.md')).toBeGreaterThan(inbox.indexOf('old-idea.md'))
-})
-
-test('inbox: the age of each note in days', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, NOTES, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:inbox' })
-
-  expect(facts(fake)).toContain('- `Inbox/old-idea.md` (9 days)')
-  expect(facts(fake)).toContain('- `Inbox/new-idea.md` (1 days)')
-})
-
-test('capture: the hubs with their tags', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, NOTES, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:capture une idée' })
-
-  expect(facts(fake)).toContain('Hubs:\n- `Projects/Parcels/parcels.md` (tags: project/parcels)')
-})
-
-test('wrapup: no session model, the error logs', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, NOTES, {}, GIT)
+  await $.session.start(startIn(`${HOME}/code/parcels`))
   await $.prompt.submit({ text: '/pyxis:wrapup' })
 
   const block = facts(fake)
   expect(block).toContain("Template: none (`Templates/session.md` absent): use the skill's default format.")
-  expect(block).toContain('- `AI/logs/pyxis-errors.log` (1 lines): bad repos')
+  expect(block).toContain('Error logs:\n- `AI/logs/pyxis-errors.log` (1 lines): bad repos')
+  expect(block).not.toContain('Hubs:')
+  expect(block).not.toContain("This session's hubs:")
+  expect(block).not.toContain('parcels.md')
+})
+
+test('a removed skill typed after the update: no facts block, no error logged', OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, { ...NOTES, [`${V}/AI/logs/pyxis-errors.log`]: '' }, {}, GIT)
+  for (const text of ['/pyxis:capture une idée', '/pyxis:daily', '/pyxis:hub parcels']) {
+    await $.prompt.submit({ text })
+    expect(lastContext(fake)).not.toContain('pyxis, for')
+  }
+  expect(fake.files.get(`${V}/AI/logs/pyxis-errors.log`)?.text ?? '').toBe('')
 })
 
 test('passation: the session’s repository folder, or the one outside repositories', OPTIONS, async ($, on) => {
@@ -194,150 +140,58 @@ test('passation: the open ones of that folder', OPTIONS, async ($, on) => {
 })
 
 test('a folder the skill needs is missing: said, nothing listed', OPTIONS, async ($, on) => {
-  const notes: Notes = { ...NOTES, [`${V}/.claude/pyxis.json`]: JSON.stringify({ folders: { daily: null } }) }
+  const notes: Notes = { ...NOTES, [`${V}/.claude/pyxis.json`]: JSON.stringify({ folders: { sessions: null } }) }
   const fake = fakeEngine(on, notes, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:daily' })
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
 
   const block = facts(fake)
-  expect(block).toContain('Missing: the daily folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
-  expect(block).not.toContain('Previous daily note')
-  expect(block.split('\n')[1]).not.toContain('daily')
+  expect(block).toContain('Missing: the sessions folder is turned off in `.claude/pyxis.json`: say so in one line and stop.')
+  expect(block).not.toContain('Error logs')
 })
 
-test('todos: nothing missing while the daily or the hubs folder is there', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, { [`${V}/Inbox/`]: '', [`${V}/Daily/`]: '' }, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:todos' })
-
-  expect(facts(fake)).toContain('Open todos:\n- none')
-  expect(facts(fake)).not.toContain('Missing')
-})
-
-test('todos: both folders missing, both said', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, { [`${V}/Inbox/`]: '' }, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:todos' })
-
-  expect(facts(fake)).toContain('Missing: the daily folder (`Daily`) is absent: create it or change it in `.claude/pyxis.json`')
-  expect(facts(fake)).toContain('Missing: the hubs folder (`Projects`) is absent: create it or change it in `.claude/pyxis.json`')
-})
-
-test('an empty vault: every list says none', OPTIONS, async ($, on) => {
-  const fake = fakeEngine(on, { [`${V}/Inbox/`]: '', [`${V}/Daily/`]: '' }, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:morning' })
-
-  expect(facts(fake)).toBe(
-    [
-      'pyxis, for `/pyxis:morning`: vault `/home/ada/vault`, today Tuesday 2026-10-13, session id `S1`.',
-      'Folders, relative to the vault: inbox `Inbox`, daily `Daily`, sessions `AI/sessions`, logs `AI/logs`, passations `AI/passations`.',
-      'Verify tag: `#todo/verify`.',
-      "Template: none: use the skill's default format.",
-      "Today's daily note:",
-      '- `Daily/2026-10-13.md` (absent)',
-      'Previous daily note:',
-      '- none',
-      'Session notes of today:',
-      '- none',
-      'Newest session note:',
-      '- none',
-      'Open todos:',
-      '- none',
-      'Repositories of the hubs:',
-      '- none',
-      'Inbox, oldest first:',
-      '- none',
-    ].join('\n'),
-  )
-})
-
-test('a skill typed from a repository outside the vault: the vault’s CLAUDE.md is named', OPTIONS, async ($, on) => {
+test('a skill typed from a repository outside the vault: the vault’s CLAUDE.md is not named', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES, {}, GIT)
   await $.session.start(startIn(`${HOME}/code/parcels`))
-  await $.prompt.submit({ text: '/pyxis:decision we keep otters' })
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
 
-  const block = facts(fake)
-  expect(block).toContain('Verify tag: `#todo/verify`.')
-  expect(block).toContain('This session is outside the vault: read `/home/ada/vault/CLAUDE.md` before writing a note.')
-
-  await $.session.start(startIn(`${V}/Projects`))
-  await $.prompt.submit({ text: '/pyxis:decision we keep otters' })
-  expect(facts(fake)).not.toContain('outside the vault')
-})
-
-test('verifyTag turned off in pyxis.json: the block says none', OPTIONS, async ($, on) => {
-  const notes: Notes = { ...NOTES, [`${V}/.claude/pyxis.json`]: JSON.stringify({ verifyTag: null }) }
-  const fake = fakeEngine(on, notes, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:daily' })
-
-  expect(facts(fake)).toContain('Verify tag: none.')
-  expect(facts(fake)).not.toContain('Verify tag: `')
+  expect(facts(fake)).not.toContain('CLAUDE.md')
+  expect(facts(fake)).not.toContain('Verify tag')
 })
 
 test('the block goes with each pyxis skill, not with a lookalike', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES, {}, GIT)
 
-  await $.prompt.submit({ text: '/pyxis:capture une idée' })
-  expect(lastContext(fake)).toContain("pyxis: the user's second brain")
-  expect(lastContext(fake)).toContain('pyxis, for `/pyxis:capture`')
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
+  expect(lastContext(fake)).toContain("pyxis: ")
+  expect(lastContext(fake)).toContain('pyxis, for `/pyxis:wrapup`')
 
-  await $.prompt.submit({ text: '/pyxis:inbox' })
-  expect(lastContext(fake)).toContain('pyxis, for `/pyxis:inbox`')
-  expect(lastContext(fake)).not.toContain("pyxis: the user's second brain")
+  await $.prompt.submit({ text: '/pyxis:passation' })
+  expect(lastContext(fake)).toContain('pyxis, for `/pyxis:passation`')
+  expect(lastContext(fake)).not.toContain('Session id:')
 
   await $.prompt.submit({ text: '/pyxis:passations' })
   expect(lastContext(fake)).not.toContain('pyxis, for')
 })
 
-test('the sessions folder’s other files are not session notes', OPTIONS, async ($, on) => {
-  const notes: Notes = {
-    ...NOTES,
-    [`${V}/AI/sessions/2026-10-13-zzz.txt`]: 'x',
-    [`${V}/AI/sessions/2026-10-14-later.json`]: 'x',
-  }
-  const fake = fakeEngine(on, notes, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:morning' })
-  expect(facts(fake)).toContain('Newest session note:\n- `AI/sessions/2026-10-13-today.md`')
-
-  await $.prompt.submit({ text: '/pyxis:daily' })
-  expect(facts(fake)).not.toContain('zzz.txt')
-})
-
-test('a repository shared by two hubs: one line naming both, git run once', OPTIONS, async ($, on) => {
-  const notes: Notes = {
-    ...NOTES,
-    [`${V}/Projects/Depot/depot.md`]: '---\nrepos: [~/code/parcels]\n---\n',
-  }
-  const fake = fakeEngine(on, notes, {}, GIT)
-  await $.prompt.submit({ text: '/pyxis:morning' })
-
-  expect(facts(fake)).toContain('Repositories of the hubs:\n- depot, parcels: `/home/ada/code/parcels` on main, 2 uncommitted\n')
-  const branches = fake.git.filter(c => c.includes('--show-current') && c[2] === `${HOME}/code/parcels`)
-  expect(branches).toHaveLength(1)
-})
-
 test('an unreadable date: no facts, a line in the error log, the start block kept', OPTIONS, async ($, on) => {
   const fake = fakeEngine(on, NOTES, {}, GIT)
   fake.date = 'mardi\n'
-  await $.prompt.submit({ text: '/pyxis:daily' })
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
 
   expect(lastContext(fake)).not.toContain('pyxis, for')
-  expect(lastContext(fake)).toContain('Working rules in this vault')
+  expect(lastContext(fake)).toContain('Session id:')
   expect(fake.files.get(`${V}/AI/logs/pyxis-errors.log`)?.text).toContain("unreadable date: 'mardi'")
 })
 
-test('folders and notes behind symbolic links count as the ones they lead to', OPTIONS, async ($, on) => {
+test('notes behind symbolic links count as the ones they lead to', OPTIONS, async ($, on) => {
   const notes: Notes = {
     ...NOTES,
-    [`${V}/Projects/Linked/linked.md`]: '---\ntags: [project/linked]\n---\n- [ ] through the link\n',
-    [`${V}/Inbox/shared.md`]: ['an idea kept elsewhere', 20],
+    [`${V}/AI/passations/no-repo/shared.md`]: ['---\nstatus: active\ndescription: kept elsewhere\n---\n', 20],
   }
   const fake = fakeEngine(on, notes, {}, GIT)
-  fake.links.add(`${V}/Projects/Linked`)
-  fake.links.add(`${V}/Inbox/shared.md`)
-  await $.prompt.submit({ text: '/pyxis:morning' })
+  fake.links.add(`${V}/AI/passations/no-repo/shared.md`)
+  await $.session.start(startIn('/tmp'))
+  await $.prompt.submit({ text: '/pyxis:passation' })
 
-  const block = facts(fake)
-  expect(block).toContain('through the link — `Projects/Linked/linked.md`:4')
-  expect(block).toContain('- `Inbox/shared.md` (20 days)')
-  await $.prompt.submit({ text: '/pyxis:capture une idée' })
-  expect(facts(fake)).toContain('- `Projects/Linked/linked.md` (tags: project/linked)')
+  expect(facts(fake)).toContain('no-repo/shared.md` (20 days ago): kept elsewhere')
 })
-
