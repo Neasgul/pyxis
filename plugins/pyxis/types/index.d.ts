@@ -36,6 +36,8 @@ declare module 'claude-code' {
       isThresholdHidden: boolean
       /** The threshold notice went with a message since the last crossing. */
       isThresholdNoticed: boolean
+      /** The status line shows an inbox count of this session: an emptied inbox clears it. */
+      isInboxShown: boolean
     }
   }
 }

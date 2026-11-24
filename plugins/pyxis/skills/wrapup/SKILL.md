@@ -1,5 +1,5 @@
 ---
-description: Review the session, propose what should be retained and where, then write the session summary once I approve. Use when I say wrap up, wrapup, or close the session.
+description: Review the session, write its summary and the wiki inbox notes it settled, and propose changes to the rules. Use when I say wrap up, wrapup, or close the session.
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(ls:*)
 disable-model-invocation: true
 ---
@@ -47,21 +47,27 @@ the right notes). Also what's written and now wrong (fix the existing note,
 don't add a contradicting one) and what's written twice (one place, linked
 from the others).
 
-**Where it goes is set by the rules loaded in this session**: my
-`~/.claude/CLAUDE.md` and what it imports, the repository's CLAUDE.md or
-AGENTS.md.
+**Where it goes depends on the block.** When it has a line starting `` Wiki: ``, read
+`<wiki>/AGENTS.md` first, with the path that line gives: it says what belongs in the wiki and the
+format of an inbox note.
 
-- Follow an explicit rule that names a place for such facts, with the
-  format it gives.
-- Never infer a place from hints: a folder or a tool that exists is not a
-  rule.
-- With no such rule, the fact goes in the session summary only.
-- A change to how we work: propose it for the CLAUDE.md or AGENTS.md it
-  belongs in.
-- When two rules disagree about where something goes, show both and let me
-  choose.
-- Each proposal names its destination and the rule behind it (e.g. "per
-  the 'Notes' rule of ~/.claude/CLAUDE.md").
+- With a `Wiki` line, a fact that belongs in the wiki, in the sense of that `AGENTS.md`, goes in
+  `<wiki>/inbox/YYYY-MM-DD-<subject>.md`, in the format that `AGENTS.md` gives, with `target:`
+  (the page you propose, or `new page`). Look for no other rule for such a fact. Never write to a
+  page of the wiki, only to its `inbox/`: a wiki page that is now wrong gets an inbox note whose
+  `target` is that page.
+- A fact outside the subject of the wiki, or any fact when the block has no `Wiki` line, follows
+  the rules loaded in this session: my `~/.claude/CLAUDE.md` and what it imports, the
+  repository's CLAUDE.md or AGENTS.md.
+  - Follow an explicit rule that names a place for such facts, with the format it gives.
+  - Never infer a place from hints: a folder or a tool that exists is not a rule.
+  - With no such rule, the fact goes in the session summary only.
+- A change to how we work: propose it for the CLAUDE.md or AGENTS.md it belongs in.
+- When two rules disagree about where something goes, show both and let me choose.
+- Each proposal names its destination and the rule behind it (e.g. "per the 'Notes' rule of
+  ~/.claude/CLAUDE.md", or "per the wiki's `AGENTS.md`").
+- A correction to an existing note, outside the inbox, is a proposal too: show the note and the
+  exact change.
 
 Nothing goes to auto-memory (`~/.claude/projects/…/memory`). If `Error
 logs` in the block is not `none`, show them.
@@ -73,21 +79,31 @@ instruction I had to repeat, a mistake I caught and you didn't, a check
 redone by hand more than once. If there's nothing, say so in one line — two
 solid proposals beat six lukewarm ones.
 
-## 4. Stop
+## 4. Present
 
-Present three short lists: **what's still open**, **what you propose to
-write or correct** (exact text, destination and the rule behind it),
-**what you propose to change in how we work**. Write nothing before I
-approve.
+Present three short lists: **what's still open**; **what is written without waiting**; **what
+waits for my approval** (exact text, destination and the rule behind it: a change to a
+`CLAUDE.md`, an `AGENTS.md` or the loaded rules, any correction to an existing note outside the
+inbox, and every other fact you propose to write), with the changes to how we work from step 3
+among them.
+
+- **With a `Wiki` line in the block**, the second list holds each inbox note with its `target`,
+  then the session summary. Do not end the turn here: step 5 happens in this same reply.
+- **Without a `Wiki` line**, nothing is written without waiting: say so in one line, write
+  nothing yet, and end the turn for my answer.
 
 ## 5. Apply
 
-Write what I approved and nothing else. Then write the session summary,
-as `<today>-<topic-slug>.md`: where an explicit rule loaded in this session
-says session summaries go, else in the block's sessions folder, creating
-the folder if it is absent. If the block's `Template:` line names a file to
-follow, follow it and fill its placeholders; never edit the template. If it
-says `Template: none`, use the default format below:
+- **With a `Wiki` line**: in the same reply, write the inbox notes and the session summary now,
+  without asking, and list their paths. Then wait, and only for the items of the "waits for my
+  approval" list: write those only after I approve them, and nothing I did not approve.
+- **Without a `Wiki` line**: once I answer, write what I approved and nothing else, then the
+  session summary.
+
+The session summary is `<today>-<topic-slug>.md`: where an explicit rule loaded in this session
+says session summaries go, else in the block's sessions folder, creating the folder if it is
+absent. If the block's `Template:` line names a file to follow, follow it and fill its
+placeholders; never edit the template. If it says `Template: none`, use the default format below:
 
 ```markdown
 ---

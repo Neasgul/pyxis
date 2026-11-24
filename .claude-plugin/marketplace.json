@@ -13,7 +13,7 @@
     {
       "name": "pyxis",
       "source": "./plugins/pyxis",
-      "description": "Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes folder."
+      "description": "Handoffs between sessions, a context threshold alert, a session wrap-up and a wiki Claude keeps."
     }
   ]
 }

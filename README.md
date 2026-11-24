@@ -17,8 +17,9 @@ window is too small for the threshold, the threshold is 75% of the window (150k 
 
 ## pyxis
 
-Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes
-folder (the `vault` option):
+Handoffs between sessions, a context threshold alert, a session wrap-up and a wiki Claude keeps.
+The first three live in a notes folder (the `vault` option), the wiki in a folder of its own (the
+`wiki` option):
 
 - **Rules.** The first message of each session, and the first after a compaction, carries the
   notes folder, its folders and the passation rule.
@@ -29,16 +30,48 @@ folder (the `vault` option):
   asked again after the context falls back below the threshold. Hiding the warning cancels the
   request too.
 - **Skills.** Each one gets the folders and what it needs from pyxis when you type it:
-  `/pyxis:wrapup` (review the session, propose what to retain and where, write its summary)
-  and `/pyxis:passation` (hand a task over). The wrap-up writes where the rules loaded in the
-  session say, and names the rule behind each destination; without one, a fact stays in the
-  session summary.
+  `/pyxis:wrapup` (review the session, write its summary) and `/pyxis:passation` (hand a task
+  over). With a wiki, the wrap-up writes the session summary and the wiki inbox notes without
+  asking; a change to the rules, and a correction to an existing note, wait for your approval.
+  Without a wiki, it proposes first and writes nothing before your answer, then the summary.
+  Outside the wiki it writes where the rules loaded in the session say, and names the rule
+  behind each destination; without one, a fact stays in the session summary.
+- **Wiki.** Off by default. Set the `wiki` option to an existing folder (for example
+  `~/notes/wiki`; an empty folder is fine, `/pyxis:ingest` offers to create the skeleton in it)
+  and Claude keeps it: durable facts a session settles are written as notes to its `inbox/`, and
+  never to a page without your agreement. With the option empty, the wiki features are off. If
+  the folder is set but absent, pyxis says so once.
+  - *Rule.* The rules block carries the wiki's path and the inbox rule: a note goes to
+    `<wiki>/inbox/YYYY-MM-DD-<subject>.md`, in the format the wiki's own `AGENTS.md` gives, and
+    inbox notes are never cited as true.
+  - *Index.* At the first message of a session inside a repository that a wiki page names in its
+    `repos:` field, the section of `<wiki>/index.md` for that page's folder is added to the
+    block, when it is short enough.
+  - *Counter.* The status line shows `inbox N` while notes wait in the inbox, refreshed every 30
+    seconds.
+  - *Skills.* `/pyxis:ingest [source]` brings a source, or the inbox notes, into the pages, one
+    source at a time, after you agree to each change; `/pyxis:lint` checks the wiki (broken
+    links, oversized pages, stale index, secrets, pending notes) and reads it for contradictions
+    and stale claims, and fixes nothing unasked; `/pyxis:graph [file]` draws the wiki as a graph,
+    served live on `127.0.0.1` or written to an HTML file. When the wiki has no `AGENTS.md`,
+    ingest offers to create the skeleton (the rules, an empty index, a log, the `inbox/` and
+    `raw/` folders), and never overwrites a file.
 
 Removed in 0.3.0: project hubs, the dashboard, and the capture, inbox, hub, decision, daily,
 morning and todos skills.
 
-Options: `vault` (the notes folder, required), `language` (`en` or `fr`) and `threshold`
-(tokens, 300k by default, 75% of the model's window when that is smaller).
+Options: `vault` (the notes folder, required), `wiki` (the wiki folder, optional), `language`
+(`en` or `fr`) and `threshold` (tokens, 300k by default, 75% of the model's window when that is
+smaller).
+
+The wiki's scripts (index, lint, graph, skeleton) run with [bun](https://bun.sh), which the wiki
+skills need; the rest of pyxis needs nothing but Claude Code. To let a session write to the inbox
+from any folder, allow that folder yourself in `~/.claude/settings.json` (pyxis does not touch
+your settings):
+
+```json
+{ "permissions": { "additionalDirectories": ["<wiki>/inbox"] } }
+```
 
 ### Conventions
 
@@ -64,8 +97,7 @@ pyxis says so once.
 
 When the templates folder holds `session.md` or `passation.md`, the matching skill follows it.
 
-pyxis never edits a note beyond what its banner and its skills do, and needs nothing but Claude
-Code.
+pyxis never edits a note beyond what its banner and its skills do.
 
 The rules go with your messages, so subagents never get them.
 
@@ -83,6 +115,8 @@ claude plugin install context-gauge@pyxis --scope user
 claude plugin install pyxis@pyxis --scope user
 echo '{"vault":"<path to the vault>"}' | claude plugin configure pyxis@pyxis --values-stdin
 ```
+
+To keep a wiki too, add `"wiki":"<path to the wiki>"` to those values.
 
 `claude plugin marketplace update pyxis` then `claude plugin update pyxis@pyxis` bring a new
 version.

@@ -1,7 +1,7 @@
 {
   "name": "pyxis",
-  "version": "0.3.0",
-  "description": "Handoffs between sessions, a context threshold alert and a session wrap-up, kept in a notes folder.",
+  "version": "0.4.0",
+  "description": "Handoffs between sessions, a context threshold alert, a session wrap-up and a wiki Claude keeps.",
   "author": { "name": "Neasgul" },
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -10,6 +10,12 @@
       "title": "Vault",
       "description": "The notes folder that holds the handoffs, the session summaries and the logs.",
       "required": true
+    },
+    "wiki": {
+      "type": "directory",
+      "title": "Wiki",
+      "description": "The wiki folder Claude keeps: its inbox, pages and index. Leave empty for no wiki.",
+      "required": false
     },
     "language": {
       "type": "string",

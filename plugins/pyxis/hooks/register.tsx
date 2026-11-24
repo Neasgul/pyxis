@@ -5,6 +5,7 @@ import { effectiveThreshold, isWithin, loadKit, logLine, onDisk, report, setting
 import type { Kit, Settings } from './conventions'
 import { repoRoot } from './git'
 import { text } from './i18n'
+import { REFRESH_MS, refreshInbox } from './inbox'
 import { currentMemory, measureTranscript, saveMemory } from './memory'
 import {
   claimNotice,
@@ -20,6 +21,7 @@ import {
 } from './passations'
 import { rulesBlock } from './rules'
 import { factsBlock, skillFacts, skillOfSubmission } from './skills'
+import { indexSection } from './wiki'
 
 // The session's values, declared in ../types: they survive a reload of the module.
 const passations = atom({ plugin: 'pyxis', key: 'passations' } as const, [])
@@ -57,7 +59,7 @@ async function start($: EngineInterface, s: Settings, cwd: string) {
   await update($, passations, () => list)
 }
 
-/** What the model reads with this message: the start block and the open handoffs once, the threshold notice once per crossing, a skill's facts. */
+/** What the model reads with this message: the start block, the wiki index section of the repository and the open handoffs once, the threshold notice once per crossing, a skill's facts. */
 async function contextFor($: EngineInterface, s: Settings, e: { text: string; command?: { name: string } }): Promise<string[]> {
   const kit = await ready($, s, 'prompt.submit')
   if (kit === null) {
@@ -71,6 +73,15 @@ async function contextFor($: EngineInterface, s: Settings, e: { text: string; co
 
   if (!memory.isPrimed) {
     blocks.push(rulesBlock(await onDisk($, kit), memory.id, $.plugin.root))
+    // A failure costs the section only, not the blocks around it.
+    try {
+      const section = await indexSection($, kit, cwd)
+      if (section !== null) {
+        blocks.push(section)
+      }
+    } catch (error) {
+      await failed($, s, 'prompt.submit', error)
+    }
     const list = await openPassations($, kit, isVaultSession, repo ? [repo] : [])
     if (list.length > 0) {
       blocks.push(modelList(list, kit, await $.clock.now()))
@@ -113,13 +124,29 @@ async function passationsCommand($: EngineInterface, s: Settings): Promise<{ tex
   return { text: list.length === 0 ? t.nonePassations(scope) : t.somePassations(list.length, scope) }
 }
 
+/** The inbox count of the wiki, in the status line. A hook never blocks: a failure goes to the error log. */
+async function inbox($: EngineInterface, s: Settings, where: string) {
+  try {
+    await refreshInbox($, await loadKit($, s))
+  } catch (error) {
+    await failed($, s, where, error)
+  }
+}
+
 export const register: Register = (on, options) => {
   const s = settings(options)
   const t = text(s.language)
+  let timer: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await start($, s, e.cwd).catch(error => failed($, s, 'session.start', error))
+    // Without the wiki option the status line is left alone: no count, no timer.
+    if (s.wiki !== '') {
+      await inbox($, s, 'session.start')
+      timer?.cancel()
+      timer = $.clock.every(REFRESH_MS, () => void inbox($, s, 'inbox.refresh'))
+    }
 
     return started
   })
@@ -128,9 +155,24 @@ export const register: Register = (on, options) => {
   on('session.attach', async ($, e, next) => {
     const attached = await next(e)
     await ready($, s, 'session.attach').catch(error => failed($, s, 'session.attach', error))
+    if (s.wiki !== '') {
+      await inbox($, s, 'session.attach')
+    }
 
     return attached
   })
+
+  // A note written or removed by the agent shows at once, not at the next tick. Without the wiki option there is no hook at all, and the tool's result never waits on the count.
+  if (s.wiki !== '') {
+    on('tool.call', async ($, e, next) => {
+      const result = await next(e)
+      if (e.tool === 'Write' || e.tool === 'Edit' || e.tool === 'Bash') {
+        void inbox($, s, 'tool.call')
+      }
+
+      return result
+    })
+  }
 
   on('prompt.submit', async ($, e, next) => {
     if (isOwnCommand(e.text)) {

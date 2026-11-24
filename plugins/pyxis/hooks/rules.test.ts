@@ -14,6 +14,8 @@ const KIT: Kit = {
   threshold: 300_000,
   home: HOME,
   isVaultFound: true,
+  wiki: '',
+  isWikiFound: false,
   problems: [],
 }
 
@@ -113,4 +115,27 @@ test('/pyxis:vault typed after the update: the block goes with it like any messa
   const blocks = fake.prompts.map(p => p.context.filter(c => c.startsWith('pyxis: ')).length)
   expect(blocks).toEqual([1])
   expect(fake.panes).toEqual([])
+})
+
+const WIKI = '/Users/someone/notes/wiki'
+const WIKI_RULE = `Wiki: \`${WIKI}\` (its contract: \`${WIKI}/AGENTS.md\`). A wiki page injected into the conversation counts as read. If the wiki says nothing on a point, say so rather than filling the gap. When this session settles a durable fact within the wiki's subject (as its AGENTS.md defines it), write it to \`${WIKI}/inbox/YYYY-MM-DD-<subject>.md\` in the format AGENTS.md gives, with the page you propose as \`target:\` and what lets someone check the fact, and tell the user in one line. Never edit a wiki page on your own: nothing enters a page without the user's agreement. Inbox notes are not validated: never cite them as true.`
+
+test('a wiki found: the rule is the last line of the block, with the wiki path', () => {
+  const kit: Kit = { ...KIT, wiki: WIKI, isWikiFound: true }
+  const block = rulesBlock(kit, 'S1', '/plugins/pyxis')
+  expect(block.endsWith(`\n${WIKI_RULE}`)).toBe(true)
+  expect(block).not.toContain('<wiki>')
+})
+
+test('a wiki found with passation: the rule comes after the passation line', () => {
+  const kit: Kit = { ...KIT, wiki: WIKI, isWikiFound: true }
+  const lines = rulesBlock(kit, 'S1', '/p').split('\n')
+  expect(lines[lines.length - 1]).toBe(WIKI_RULE)
+  expect(lines[lines.length - 2]).toContain('Passation (handoff)')
+})
+
+test('a wiki set but not found: the block is the same as without a wiki', () => {
+  const kit: Kit = { ...KIT, wiki: WIKI, isWikiFound: false }
+  expect(rulesBlock(kit, 'S1', '/p')).toBe(rulesBlock(KIT, 'S1', '/p'))
+  expect(rulesBlock(kit, 'S1', '/p')).not.toContain('Wiki:')
 })

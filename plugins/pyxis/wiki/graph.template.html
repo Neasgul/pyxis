@@ -1,0 +1,399 @@
+<title>Wiki Map</title>
+<!-- Template of wiki/graph.ts (static page) and wiki/serve.ts (live page), which fill in the data, the date and the live flag. Edit here, not in the generated page. -->
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-height star chart on the left, a reading panel on the right (stacked under it on phones). */
+:root {
+  --bg: #eef2f7;
+  --surface: #ffffff;
+  --ink: #18212e;
+  --muted: #5d6b7e;
+  --line: #c9d3e0;
+  --edge: #8795a8;
+  --accent: #2b59c3;
+  --g-0: #2f6fd6;
+  --g-1: #8a4fd1;
+  --g-2: #c46d12;
+  --g-3: #12897a;
+  --g-4: #c2417a;
+  --g-5: #5a7518;
+  --g-6: #7a6650;
+  --g-proposed: #c46d12;
+  --font-ui: "Instrument Sans", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b1220; --surface: #121b2c; --ink: #e3e9f3; --muted: #8e9bb0; --line: #26324a; --edge: #5b6a85; --accent: #7aa2ff;
+  --g-0: #6fa2ff; --g-1: #b48cf2; --g-2: #f0a75a; --g-3: #4fd1bf; --g-4: #ec7fae; --g-5: #a8c95a; --g-6: #c4b49a; --g-proposed: #f0a75a;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0b1220; --surface: #121b2c; --ink: #e3e9f3; --muted: #8e9bb0; --line: #26324a; --edge: #5b6a85; --accent: #7aa2ff;
+  --g-0: #6fa2ff; --g-1: #b48cf2; --g-2: #f0a75a; --g-3: #4fd1bf; --g-4: #ec7fae; --g-5: #a8c95a; --g-6: #c4b49a; --g-proposed: #f0a75a;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 14px; }
+.app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr); }
+header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line); background: var(--surface); }
+h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-left: auto; }
+.controls label { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--muted); cursor: pointer; user-select: none; }
+.controls input[type=checkbox] { accent-color: var(--accent); margin: 0; }
+#q { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 180px; }
+#q:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+svg#graph { width: 100%; height: 100%; display: block; cursor: grab; }
+svg#graph:active { cursor: grabbing; }
+.legend { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px 12px;
+  max-width: calc(100% - 24px); font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--surface) 85%, transparent);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); display: inline-block; }
+.legend .sep { width: 1px; align-self: stretch; background: var(--line); }
+.zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 4px; }
+.zoom button { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: 500 15px var(--font-ui); cursor: pointer; }
+aside { border-left: 1px solid var(--line); background: var(--surface); overflow-y: auto; min-width: 0;
+  padding: 18px 18px 24px; padding-right: max(18px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 14px; }
+.eyebrow { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+aside h2 { font-size: 18px; line-height: 1.25; margin: 0; text-wrap: balance; }
+.path { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); word-break: break-all; }
+.summary { line-height: 1.55; margin: 0; }
+.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px dashed var(--g-proposed); color: var(--g-proposed); }
+.meta { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rel h3 { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 6px 0 6px; font-weight: 500; }
+.rel ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rel button { all: unset; cursor: pointer; display: flex; gap: 8px; align-items: baseline; padding: 4px 6px; margin: 0 -6px; border-radius: 5px; font-size: 13px; line-height: 1.35; }
+.rel button:hover, .rel button:focus-visible { background: var(--bg); }
+.rel button i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c); transform: translateY(-1px); }
+.rel small { color: var(--muted); font-size: 11px; margin-left: auto; padding-left: 8px; flex: none; }
+.empty { color: var(--muted); line-height: 1.55; margin: 0; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+.stats div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.stats b { display: block; font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 11.5px; color: var(--muted); }
+
+/* graph marks */
+.edge { stroke: var(--edge); stroke-opacity: .55; stroke-width: 1.1; fill: none; }
+.edge.member { stroke-opacity: .16; stroke-width: 1; }
+.edge.proposes { stroke: var(--g-proposed); stroke-dasharray: 4 3; stroke-opacity: .85; }
+.node { cursor: pointer; }
+.node circle { fill: var(--c); stroke: var(--surface); stroke-width: 1.5; }
+.node.raw circle { fill: var(--surface); stroke: var(--c); stroke-width: 1.6; }
+.node.inbox circle { fill: none; stroke: var(--c); stroke-width: 1.8; stroke-dasharray: 3 2; }
+.node.dir circle { fill: color-mix(in srgb, var(--c) 14%, var(--surface)); stroke: var(--c); stroke-width: 2; }
+.node text { font: 500 11px var(--font-ui); fill: var(--ink); paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round; pointer-events: none; opacity: 0; transition: opacity .15s; }
+.node.dir text { font-size: 13px; font-weight: 600; opacity: 1; fill: var(--c); }
+.show-labels .node.page text, .node.hub text { opacity: 1; }
+.dim .node, .dim .edge { opacity: .12; }
+.dim .node.hl, .dim .edge.hl { opacity: 1; }
+.dim .node.hl text { opacity: 1; }
+.node.sel circle { stroke: var(--ink); stroke-width: 2.5; }
+.node.match circle { stroke: var(--accent); stroke-width: 3; }
+@media (prefers-reduced-motion: reduce) { .node text { transition: none; } }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(360px, 62vh) auto; height: auto; min-height: 100%; }
+  aside { border-left: 0; border-top: 1px solid var(--line); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .controls { margin-left: 0; }
+  #q { width: 100%; }
+  .controls .search { flex: 1 1 100%; }
+}
+</style>
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Wiki Map</h1>
+      <div class="count" id="count"></div>
+    </div>
+    <div class="controls">
+      <span class="search"><input id="q" type="search" placeholder="Search a page, a word…" aria-label="Search pages"></span>
+      <label><input type="checkbox" id="f-page" checked> Pages</label>
+      <label><input type="checkbox" id="f-raw" checked> Raw sources</label>
+      <label><input type="checkbox" id="f-inbox" checked> Inbox</label>
+      <label><input type="checkbox" id="f-dir" checked> Folders</label>
+      <label><input type="checkbox" id="f-labels"> All labels</label>
+    </div>
+  </header>
+  <div class="stage">
+    <svg id="graph" role="img" aria-label="Graph of the wiki pages and their links"></svg>
+    <div class="zoom">
+      <button type="button" id="zin" aria-label="Zoom in">+</button>
+      <button type="button" id="zout" aria-label="Zoom out">−</button>
+      <button type="button" id="zfit" aria-label="Fit to screen">⤢</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <aside id="panel" aria-live="polite"></aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+// Live: served by wiki/serve.ts, which pushes the new graph on /events at every change of the wiki.
+const LIVE = __LIVE__;
+let GENERATED = "__DATE__";
+const DATA = __DATA__;
+// Folders take the palette in alphabetical order, then wrap around.
+const PALETTE = 7;
+const color = g => `var(--g-${Math.max(GROUPS.indexOf(g), 0) % PALETTE})`;
+const KIND_LABEL = { page: "Page", raw: "Raw source", inbox: "Inbox note, not validated", dir: "Folder" };
+
+let GROUPS = [], nodes = [], links = [], byId = new Map(), out = new Map(), inc = new Map(), pageCount = 0, realLinks = 0;
+
+// The drawn graph from the data: folder hubs, membership edges, degrees.
+// A node already on screen keeps its place; a new one starts next to its folder.
+function load(data) {
+  const prev = byId;
+  GROUPS = [...new Set(data.nodes.map(n => n.group))]
+    .sort((a, b) => a.localeCompare(b));
+  nodes = data.nodes.map(n => ({...n}));
+  links = data.links.map(l => ({...l}));
+  const linked = new Set(); links.forEach(l => { linked.add(l.source); linked.add(l.target); });
+  GROUPS.forEach(g => nodes.push({ id: "dir:" + g, kind: "dir", group: g, title: g, summary: "" }));
+  nodes.forEach(n => {
+    if (n.kind === "page" || ((n.kind === "raw" || n.kind === "inbox") && !linked.has(n.id)))
+      links.push({ source: "dir:" + n.group, target: n.id, type: "member" });
+  });
+  byId = new Map(nodes.map(n => [n.id, n]));
+  out = new Map(); inc = new Map();
+  nodes.forEach(n => { out.set(n.id, []); inc.set(n.id, []); });
+  links.forEach(l => { out.get(l.source).push(l); inc.get(l.target).push(l); });
+  nodes.forEach(n => {
+    n.deg = links.filter(l => l.type !== "member" && (l.source === n.id || l.target === n.id)).length;
+    n.r = n.kind === "dir" ? 13 : n.kind === "page" ? 5 + Math.sqrt(n.deg) * 2.4 : 4.5;
+    if (n.kind === "page" && n.deg >= 5) n.hub = true;
+    const same = prev.get(n.id), near = same ?? prev.get("dir:" + n.group);
+    if (near?.x == null) return;
+    const jitter = () => same ? 0 : (Math.random() - 0.5) * 40;
+    Object.assign(n, { x: near.x + jitter(), y: near.y + jitter() });
+    if (same) Object.assign(n, { vx: same.vx, vy: same.vy, fx: same.fx, fy: same.fy });
+  });
+  pageCount = nodes.filter(n => n.kind === "page").length;
+  realLinks = links.filter(l => l.type === "link").length;
+  sim.nodes(nodes);
+  sim.force("link").links(links);
+}
+
+// header count and legend
+const countEl = document.getElementById("count");
+const legend = document.getElementById("legend");
+function header(status = "") {
+  countEl.textContent =
+    `${pageCount} pages · ${nodes.filter(n=>n.kind==="raw").length} raw sources · ${nodes.filter(n=>n.kind==="inbox").length} inbox notes · ${realLinks} links · ${LIVE ? "live, read " : "read "}${GENERATED}${status}`;
+  legend.innerHTML = GROUPS.map(g => `<span style="--c:${color(g)}"><i></i>${esc(g)}</span>`).join("") +
+    `<span class="sep"></span>
+     <span><svg width="12" height="12"><circle cx="6" cy="6" r="4.5" fill="var(--muted)"/></svg>page</span>
+     <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.6"/></svg>raw</span>
+     <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-dasharray="3 2"/></svg>inbox</span>
+     <span><svg width="22" height="8"><line x1="1" y1="4" x2="21" y2="4" stroke="var(--g-proposed)" stroke-width="1.5" stroke-dasharray="4 3"/></svg>proposed target</span>`;
+}
+
+// graph
+const svg = d3.select("#graph");
+const root = svg.append("g");
+const edgeG = root.append("g"), nodeG = root.append("g");
+const zoom = d3.zoom().scaleExtent([0.25, 5]).on("zoom", e => {
+  root.attr("transform", e.transform);
+  document.querySelector(".stage").classList.toggle("show-labels", e.transform.k > 1.6 || document.getElementById("f-labels").checked);
+});
+svg.call(zoom).on("dblclick.zoom", null);
+
+const sim = d3.forceSimulation()
+  .force("link", d3.forceLink().id(d => d.id)
+    .distance(l => l.type === "member" ? 55 : l.type === "proposes" ? 50 : 70)
+    .strength(l => l.type === "member" ? 0.35 : 0.6))
+  .force("charge", d3.forceManyBody().strength(d => d.kind === "dir" ? -420 : -140))
+  .force("collide", d3.forceCollide(d => d.r + 4))
+  .force("x", d3.forceX().strength(0.04))
+  .force("y", d3.forceY().strength(0.06));
+
+let edgeSel, nodeSel;
+function render(alpha = 0.5) {
+  const show = { page: f("page"), raw: f("raw"), inbox: f("inbox"), dir: f("dir") };
+  const vis = n => show[n.kind];
+  const vNodes = nodes.filter(vis);
+  const vLinks = links.filter(l => vis(l.source.id ? l.source : byId.get(l.source)) && vis(l.target.id ? l.target : byId.get(l.target)));
+
+  edgeSel = edgeG.selectAll("line").data(vLinks, l => (l.source.id||l.source) + ">" + (l.target.id||l.target) + l.type)
+    .join("line").attr("class", l => "edge " + l.type);
+  nodeSel = nodeG.selectAll("g.node").data(vNodes, d => d.id).join(enter => {
+    const g = enter.append("g")
+      .attr("tabindex", 0).attr("role", "button")
+      .on("click", (e, d) => { e.stopPropagation(); select(d.id); })
+      .on("keydown", (e, d) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(d.id); } })
+      .on("mouseenter", (e, d) => highlight(d.id))
+      .on("mouseleave", () => highlight(selected))
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.25).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+    g.append("circle");
+    g.append("text").attr("text-anchor", "middle");
+    return g;
+  })
+  // set on every render, not only on enter: a live update can change a node's kind, folder, title or size
+    .attr("class", d => `node ${d.kind}${d.hub ? " hub" : ""}${d.id === selected ? " sel" : ""}`)
+    .attr("style", d => `--c:${color(d.group)}`)
+    .attr("aria-label", d => d.title);
+  nodeSel.select("circle").attr("r", d => d.r);
+  nodeSel.select("text").attr("dy", d => d.kind === "dir" ? -d.r - 6 : d.r + 12)
+    .text(d => d.kind === "dir" ? d.title : shortLabel(d));
+  sim.alpha(alpha).restart();
+  highlight(selected); applySearch();
+}
+function f(k) { return document.getElementById("f-" + k).checked; }
+function shortLabel(d) {
+  if (d.kind === "page") return d.id.split("/").pop().replace(/\.md$/, "");
+  return d.id.split("/").pop().replace(/\.md$/, "").replace(/^\d{4}-\d\d-\d\d-/, "");
+}
+sim.on("tick", () => {
+  edgeSel.attr("x1", l => l.source.x).attr("y1", l => l.source.y).attr("x2", l => l.target.x).attr("y2", l => l.target.y);
+  nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+});
+
+// selection and neighbourhood
+let selected = null;
+function neighbours(id) {
+  const s = new Set([id]);
+  links.forEach(l => {
+    const a = l.source.id || l.source, b = l.target.id || l.target;
+    if (a === id) s.add(b); if (b === id) s.add(a);
+  });
+  return s;
+}
+function highlight(id) {
+  const stage = document.querySelector(".stage");
+  if (!id) { stage.classList.remove("dim"); nodeSel?.classed("hl", false); edgeSel?.classed("hl", false); return; }
+  const nb = neighbours(id);
+  stage.classList.add("dim");
+  nodeSel.classed("hl", d => nb.has(d.id));
+  edgeSel.classed("hl", l => (l.source.id === id || l.target.id === id));
+}
+function select(id) {
+  selected = id;
+  nodeSel.classed("sel", d => d.id === id);
+  highlight(id);
+  showPanel(id);
+}
+svg.on("click", () => { selected = null; nodeSel.classed("sel", false); highlight(null); showPanel(null); });
+
+const panel = document.getElementById("panel");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+function relList(title, items) {
+  if (!items.length) return "";
+  return `<div class="rel"><h3>${title}</h3><ul>${items.map(({ n, tag }) =>
+    `<li><button type="button" data-id="${esc(n.id)}" style="--c:${color(n.group)}"><i></i><span>${esc(n.kind === "dir" ? n.title + "/" : n.title)}</span>${tag ? `<small>${tag}</small>` : ""}</button></li>`).join("")}</ul></div>`;
+}
+function showPanel(id) {
+  if (!id) { panel.innerHTML = overview(); bindRel(); return; }
+  const n = byId.get(id);
+  const outs = out.get(id).filter(l => l.type !== "member").map(l => ({ n: l.target.id ? l.target : byId.get(l.target), tag: l.type === "proposes" ? "proposed" : "" }));
+  const ins = inc.get(id).filter(l => l.type !== "member").map(l => ({ n: l.source.id ? l.source : byId.get(l.source), tag: l.type === "proposes" ? "inbox" : "" }));
+  const members = n.kind === "dir" ? out.get(id).map(l => ({ n: l.target.id ? l.target : byId.get(l.target), tag: "" })) : [];
+  panel.innerHTML = `
+    <div class="eyebrow" style="--c:${color(n.group)}"><i></i>${esc(n.group)} · ${KIND_LABEL[n.kind]}</div>
+    <h2>${esc(n.kind === "dir" ? n.title + "/" : n.title)}</h2>
+    ${n.kind !== "dir" ? `<div class="path">wiki/${esc(n.id)}</div>` : ""}
+    ${n.kind === "inbox" ? `<div><span class="badge">waiting for validation</span></div>` : ""}
+    ${n.summary ? `<p class="summary">${esc(n.summary)}</p>` : ""}
+    ${n.kind !== "dir" ? `<div class="meta">${n.updated ? (n.kind === "inbox" ? "Created " : "Updated ") + esc(n.updated) + " · " : ""}${n.size.toLocaleString("en")} characters · ${n.deg} link${n.deg === 1 ? "" : "s"}</div>` : ""}
+    ${relList("Links to", outs)}
+    ${relList("Linked from", ins)}
+    ${relList("Pages in this folder", members)}
+    ${n.kind === "page" && !outs.length && !ins.length ? `<p class="empty">No link to or from another page. It is only reached through the index.</p>` : ""}`;
+  bindRel();
+}
+function overview() {
+  const orphans = nodes.filter(n => n.kind === "page" && n.deg === 0);
+  const top = nodes.filter(n => n.kind !== "dir").sort((a, b) => b.deg - a.deg).slice(0, 6);
+  return `
+    <div class="eyebrow">Overview</div>
+    <h2>The wiki as a graph</h2>
+    <p class="summary">Each dot is a file of <span class="path">wiki/</span>. Lines are the relative links between them and the <span class="path">raw/</span> files a page cites in its sources. Faint lines tie each page to its folder. Click a dot to read its summary and follow its links.</p>
+    <div class="stats">
+      <div><b>${pageCount}</b><span>pages</span></div>
+      <div><b>${realLinks}</b><span>links</span></div>
+      <div><b>${orphans.length}</b><span>pages with no link</span></div>
+      <div><b>${nodes.filter(n => n.kind === "inbox").length}</b><span>inbox notes waiting</span></div>
+    </div>
+    ${relList("Most linked", top.map(n => ({ n, tag: n.deg + " links" })))}
+    ${relList("Pages with no link", orphans.map(n => ({ n, tag: n.group })))}`;
+}
+function bindRel() {
+  panel.querySelectorAll("button[data-id]").forEach(b => b.addEventListener("click", () => {
+    const n = byId.get(b.dataset.id);
+    const k = { page: "page", raw: "raw", inbox: "inbox", dir: "dir" }[n.kind];
+    if (!f(k)) { document.getElementById("f-" + k).checked = true; render(); }
+    select(n.id); focusOn(n);
+  }));
+}
+function focusOn(n) {
+  const { width, height } = svg.node().getBoundingClientRect();
+  const k = Math.max(d3.zoomTransform(svg.node()).k, 1.2);
+  svg.transition().duration(450).call(zoom.transform, d3.zoomIdentity.translate(width / 2 - n.x * k, height / 2 - n.y * k).scale(k));
+}
+
+// search
+const q = document.getElementById("q");
+function applySearch() {
+  const t = q.value.trim().toLowerCase();
+  nodeSel.classed("match", d => t.length > 1 && (d.title + " " + d.id + " " + (d.summary || "")).toLowerCase().includes(t));
+}
+q.addEventListener("input", applySearch);
+q.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const m = nodeSel.filter(".match").data()[0];
+  if (m) { select(m.id); focusOn(m); }
+});
+
+["page","raw","inbox","dir"].forEach(k => document.getElementById("f-" + k).addEventListener("change", render));
+document.getElementById("f-labels").addEventListener("change", e => document.querySelector(".stage").classList.toggle("show-labels", e.target.checked || d3.zoomTransform(svg.node()).k > 1.6));
+
+// zoom buttons and fit
+document.getElementById("zin").onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1.35);
+document.getElementById("zout").onclick = () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.35);
+document.getElementById("zfit").onclick = () => fit(true);
+function fit(animate) {
+  const { width, height } = svg.node().getBoundingClientRect();
+  if (!width || !height) return;
+  const xs = nodes.filter(n => n.x != null), pad = 40;
+  const [x0, x1] = d3.extent(xs, n => n.x), [y0, y1] = d3.extent(xs, n => n.y);
+  const k = Math.min(2, 0.92 * Math.min(width / (x1 - x0 + pad * 2), height / (y1 - y0 + pad * 2)));
+  const t = d3.zoomIdentity.translate(width / 2 - k * (x0 + x1) / 2, height / 2 - k * (y0 + y1) / 2).scale(k);
+  (animate ? svg.transition().duration(450) : svg).call(zoom.transform, t);
+}
+
+load(DATA);
+header();
+render();
+for (let i = 0; i < 260; i++) sim.tick();
+sim.alpha(0.05);
+fit(false);
+showPanel(null);
+window.addEventListener("resize", () => fit(false));
+
+// live: the server sends the whole graph on connect and after each change of the wiki
+if (LIVE) {
+  let shown = JSON.stringify(DATA);
+  const events = new EventSource("events");
+  events.onopen = () => header();
+  events.onerror = () => header(" · disconnected, retrying");
+  events.onmessage = e => {
+    if (e.data === shown) return;
+    shown = e.data;
+    load(JSON.parse(e.data));
+    GENERATED = new Date().toLocaleTimeString("en-GB");
+    if (selected && !byId.has(selected)) selected = null;
+    header();
+    render(0.3);
+    showPanel(selected);
+  };
+}
+</script>

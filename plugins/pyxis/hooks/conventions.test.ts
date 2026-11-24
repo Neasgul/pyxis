@@ -1,15 +1,22 @@
+import type { EngineInterface } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_CONVENTIONS, parseConventions, settings } from './conventions'
+import { DEFAULT_CONVENTIONS, loadKit, parseConventions, settings } from './conventions'
 import { HOME, VAULT, fakeEngine, startIn } from './fake'
 
 const OPTIONS = { options: { vault: VAULT } }
 
 test('settings: the vault as given, a bad threshold and an unknown language fall back', () => {
-  expect(settings({ vault: '~/vault', threshold: 200_000, language: 'fr' })).toEqual({ vault: '~/vault', threshold: 200_000, language: 'fr' })
+  expect(settings({ vault: '~/vault', threshold: 200_000, language: 'fr' })).toEqual({ vault: '~/vault', wiki: '', threshold: 200_000, language: 'fr' })
   expect(settings({ vault: VAULT, threshold: 300 }).threshold).toBe(300_000)
   expect(settings({ vault: VAULT, threshold: Number.NaN }).threshold).toBe(300_000)
   expect(settings({ vault: VAULT, language: 'de' }).language).toBe('en')
+})
+
+test('settings: the wiki as given, empty when absent or not a string', () => {
+  expect(settings({ vault: VAULT, wiki: '~/notes/wiki' }).wiki).toBe('~/notes/wiki')
+  expect(settings({ vault: VAULT }).wiki).toBe('')
+  expect(settings({ vault: VAULT, wiki: 3 }).wiki).toBe('')
 })
 
 test('conventions: no file, the defaults; each key over its default', () => {
@@ -137,4 +144,83 @@ test('the desktop app: a problem found before it attaches is shown once it does'
   await $.prompt.submit({ text: 'hello' })
   expect(fake.toasts).toHaveLength(1)
   expect(fake.toasts[0]).toContain(`vault folder not found (${VAULT})`)
+})
+
+const WIKI = `${HOME}/notes/wiki`
+
+/** Just what `loadKit` asks of the engine: HOME, stat and read over a set of files and folders. */
+const stubEngine = (files: Record<string, string>) => {
+  const isDir = (path: string) => Object.keys(files).some(k => k.startsWith(`${path}/`))
+
+  return {
+    env: { get: async (name: string) => (name === 'HOME' ? HOME : undefined) },
+    fs: {
+      stat: async (path: string) =>
+        path in files ? { kind: 'file', size: 0, mtimeMs: 0 } : isDir(path) ? { kind: 'dir', size: 0, mtimeMs: 0 } : Promise.reject(new Error('ENOENT')),
+      read: async (path: string) => files[path] ?? Promise.reject(new Error('ENOENT')),
+    },
+  } as unknown as EngineInterface
+}
+
+const kitOf = (files: Record<string, string>, options: Record<string, unknown>) => loadKit(stubEngine(files), settings(options))
+
+test('no wiki option: no wiki, no problem', async () => {
+  const kit = await kitOf({ [`${VAULT}/.claude/pyxis.json`]: '{}' }, { vault: VAULT })
+
+  expect(kit.wiki).toBe('')
+  expect(kit.isWikiFound).toBe(false)
+  expect(kit.problems).toEqual([])
+})
+
+test('wiki option with ~ and a trailing slash: expanded, found', async () => {
+  const kit = await kitOf({ [`${VAULT}/.claude/pyxis.json`]: '{}', [`${WIKI}/index.md`]: 'x' }, { vault: VAULT, wiki: '~/notes/wiki/' })
+
+  expect(kit.wiki).toBe(WIKI)
+  expect(kit.isWikiFound).toBe(true)
+  expect(kit.problems).toEqual([])
+})
+
+test('a wiki that is missing: reported once, the vault keeps working', { options: { vault: VAULT, wiki: '~/notes/wiki/' } }, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/AI/passations/no-repo/a.md`]: '---\nstatus: active\ndescription: a\n---\n' })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'hello' })
+  await $.prompt.submit({ text: 'again' })
+
+  expect(fake.toasts).toHaveLength(1)
+  expect(fake.toasts[0]).toBe(
+    `pyxis: wiki folder not found (${WIKI}). Set the wiki option in /config, or with \`claude plugin configure pyxis@pyxis\`.`,
+  )
+  expect(fake.prompts[0]?.context.join('\n')).toContain('no-repo/a.md')
+  const log = fake.files.get(`${VAULT}/AI/logs/pyxis-errors.log`)?.text ?? ''
+  expect(log.trim().split('\n')).toHaveLength(1)
+  expect(log).toContain('wiki folder not found')
+})
+
+test('a wiki that is missing: the kit keeps its path, the vault is found', async () => {
+  const kit = await kitOf({ [`${VAULT}/.claude/pyxis.json`]: '{}' }, { vault: VAULT, wiki: '~/notes/wiki/' })
+
+  expect(kit.wiki).toBe(WIKI)
+  expect(kit.isWikiFound).toBe(false)
+  expect(kit.isVaultFound).toBe(true)
+  expect(kit.problems).toEqual([expect.stringContaining(`wiki folder not found (${WIKI})`)])
+})
+
+test('a missing wiki next to a missing vault: both told', { options: { vault: VAULT, wiki: '~/notes/wiki' } }, async ($, on) => {
+  const fake = fakeEngine(on, {})
+  await $.session.start(startIn(HOME))
+  await $.prompt.submit({ text: 'hello' })
+
+  expect(fake.toasts).toHaveLength(1)
+  expect(fake.toasts[0]).toContain(`vault folder not found (${VAULT})`)
+  expect(fake.toasts[0]).toContain(`wiki folder not found (${WIKI})`)
+})
+
+test('French: the missing wiki toast', { options: { vault: VAULT, wiki: '~/notes/wiki', language: 'fr' } }, async ($, on) => {
+  const fake = fakeEngine(on, { [`${VAULT}/.claude/pyxis.json`]: '{}' })
+  await $.session.start(startIn(VAULT))
+  await $.prompt.submit({ text: 'hello' })
+
+  expect(fake.toasts).toEqual([
+    `pyxis : dossier du wiki introuvable (${WIKI}). Réglez l'option wiki dans /config, ou par \`claude plugin configure pyxis@pyxis\`.`,
+  ])
 })

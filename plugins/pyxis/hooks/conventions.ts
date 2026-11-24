@@ -38,7 +38,8 @@ export const DEFAULT_THRESHOLD = 300_000
 // Below this, a value was most likely typed in thousands (`300` for 300k), as in context-gauge.
 const MIN_THRESHOLD = 1_000
 
-export type Settings = { vault: string; language: Language; threshold: number }
+/** `wiki` is '' without the option. */
+export type Settings = { vault: string; wiki: string; language: Language; threshold: number }
 
 /** Share of the model's window the threshold may take: past it, a smaller window would never reach the option. */
 const WINDOW_SHARE = 0.75
@@ -49,11 +50,12 @@ export const effectiveThreshold = (threshold: number, window: number | undefined
 
 /** The plugin's options, validated: a bad threshold falls back to the default, an unknown language to English. */
 export function settings(options: PluginOptions): Settings {
-  const { threshold, vault } = options
+  const { threshold, vault, wiki } = options
   const isValid = typeof threshold === 'number' && Number.isFinite(threshold) && threshold >= MIN_THRESHOLD
 
   return {
     vault: typeof vault === 'string' ? vault : '',
+    wiki: typeof wiki === 'string' ? wiki : '',
     language: options.language === 'fr' ? 'fr' : 'en',
     threshold: isValid ? threshold : DEFAULT_THRESHOLD,
   }
@@ -142,6 +144,8 @@ export type Kit = Settings &
   Conventions & {
     home: string
     isVaultFound: boolean
+    /** `wiki` is made absolute: false when the option is empty or the folder is missing (a problem, nothing else). */
+    isWikiFound: boolean
     /** What to tell the user once, in the interface language. */
     problems: string[]
   }
@@ -179,9 +183,21 @@ export async function loadKit($: EngineInterface, s: Settings): Promise<Kit> {
   const vault = trimSlash(expandHome(s.vault, home))
   const stat = vault ? await $.fs.stat(vault).catch(() => null) : null
   const t = text(s.language)
+  const wiki = trimSlash(expandHome(s.wiki, home))
+  const isWikiFound = wiki !== '' && (await $.fs.stat(wiki).catch(() => null))?.kind === 'dir'
+  const wikiProblems = wiki !== '' && !isWikiFound ? [t.wikiMissing(wiki)] : []
 
   if (stat?.kind !== 'dir') {
-    return { ...s, ...DEFAULT_CONVENTIONS, vault, home, isVaultFound: false, problems: [t.vaultMissing(vault)] }
+    return {
+      ...s,
+      ...DEFAULT_CONVENTIONS,
+      vault,
+      wiki,
+      home,
+      isVaultFound: false,
+      isWikiFound,
+      problems: [t.vaultMissing(vault), ...wikiProblems],
+    }
   }
   const raw = await $.fs.read(`${vault}/${CONVENTIONS_FILE}`).catch(() => null)
   const { conventions, problems } = parseConventions(raw)
@@ -190,9 +206,11 @@ export async function loadKit($: EngineInterface, s: Settings): Promise<Kit> {
     ...s,
     ...conventions,
     vault,
+    wiki,
     home,
     isVaultFound: true,
-    problems: problems.map(key => t.conventionsProblem(CONVENTIONS_FILE, key)),
+    isWikiFound,
+    problems: [...problems.map(key => t.conventionsProblem(CONVENTIONS_FILE, key)), ...wikiProblems],
   }
 }
 

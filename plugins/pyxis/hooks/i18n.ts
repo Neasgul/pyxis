@@ -8,6 +8,8 @@ const EN = {
   age: (days: number) => (days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`),
   vaultMissing: (path: string) =>
     `pyxis: vault folder not found (${path}). Set the vault option in /config, or with \`claude plugin configure pyxis@pyxis\`.`,
+  wikiMissing: (path: string) =>
+    `pyxis: wiki folder not found (${path}). Set the wiki option in /config, or with \`claude plugin configure pyxis@pyxis\`.`,
   conventionsProblem: (file: string, key: string) => `pyxis: ${file}: ${key} ignored, default used.`,
   moveFailed: (error: string) => `pyxis: the handoff could not be moved (${error}).`,
   resumeFailed: (file: string, error: string) => `pyxis: the handoff ${file} could not be resumed (${error}).`,
@@ -32,6 +34,8 @@ const FR: Text = {
   age: days => (days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : `il y a ${days} j`),
   vaultMissing: path =>
     `pyxis : dossier du vault introuvable (${path}). Réglez l'option vault dans /config, ou par \`claude plugin configure pyxis@pyxis\`.`,
+  wikiMissing: path =>
+    `pyxis : dossier du wiki introuvable (${path}). Réglez l'option wiki dans /config, ou par \`claude plugin configure pyxis@pyxis\`.`,
   conventionsProblem: (file, key) => `pyxis : ${file} : ${key} ignoré, valeur par défaut.`,
   moveFailed: error => `pyxis : la passation n'a pas pu être déplacée (${error}).`,
   resumeFailed: (file, error) => `pyxis : la passation ${file} n'a pas pu être reprise (${error}).`,

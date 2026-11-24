@@ -1,6 +1,8 @@
 // The engine under pyxis in tests: a vault and repositories in memory, what the plugin runs,
 // submits and shows, recorded. Imported by the tests only.
 import type { FsEntry, On, RenderSurface } from 'claude-code'
+import { mock } from 'claude-code/testing'
+import type { MockClock } from 'claude-code/testing'
 
 export const NOW = Date.UTC(2026, 9, 13, 10)
 export const DAY = 86_400_000
@@ -17,6 +19,10 @@ export type Fake = {
   git: string[][]
   prompts: { text: string; context: readonly string[] }[]
   toasts: string[]
+  /** What the plugin put in the status line, in order; `undefined` is a clear. */
+  statuses: (string | undefined)[]
+  /** The clock in memory, at `NOW`: it moves only when a test advances it, and then each `$.clock.every` timer fires. */
+  clock: MockClock
   panes: string[]
   session: { cwd: string; id: string }
   /** The surfaces attached: the one the session started on, then each that attached. */
@@ -64,6 +70,8 @@ export function fakeEngine(
     git: [],
     prompts: [],
     toasts: [],
+    statuses: [],
+    clock: mock.clock(on, { now: NOW }),
     panes: [],
     session: { cwd: VAULT, id: 'S1' },
     surfaces: [],
@@ -133,7 +141,6 @@ export function fakeEngine(
   })
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
-  on('clock.now', () => ({ value: NOW }))
   on('command.describe', (_$, e) => ({ description: e.description, argumentHint: e.argumentHint, isHidden: e.isHidden }))
   on('command.register', (_$, e) => {
     fake.registered.push(e.name)
@@ -202,6 +209,10 @@ export function fakeEngine(
   })
   on('ui.toast', (_$, e) => {
     fake.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', (_$, e) => {
+    fake.statuses.push(e.text)
     return { value: undefined }
   })
   on('ui.open', (_$, e) => {

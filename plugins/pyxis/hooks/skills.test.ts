@@ -31,6 +31,7 @@ const FACTS: SkillFacts = {
     { role: 'passations', path: 'AI/passations' },
   ],
   template: { path: 'Templates/passation.md', isPresent: true },
+  wiki: null,
   missing: [],
   lists: [{ title: 'Write it in', lines: ['`/home/ada/vault/AI/passations/no-repo`'] }],
 }
@@ -41,6 +42,9 @@ const facts = (fake: Parameters<typeof lastContext>[0]) => lastContext(fake).sli
 test('skillOf: wrapup and passation at the start of the message, nothing else', () => {
   expect(skillOf('/pyxis:wrapup')).toBe('wrapup')
   expect(skillOf('  /pyxis:passation')).toBe('passation')
+  expect(skillOf('/pyxis:ingest raw/x.md')).toBe('ingest')
+  expect(skillOf('/pyxis:lint')).toBe('lint')
+  expect(skillOf('/pyxis:graph file')).toBe('graph')
   const removed = ['/pyxis:capture une idée', '/pyxis:inbox', '/pyxis:daily', '/pyxis:morning', '/pyxis:todos', '/pyxis:decision x', '/pyxis:hub x']
   for (const message of [...removed, '/pyxis:passations', '/pyxis:vault', 'pyxis:wrapup', '/wrapup', 'parle-moi de /pyxis:wrapup']) {
     expect(skillOf(message)).toBeNull()
@@ -100,6 +104,8 @@ test('wrapup: the error logs and no hub', OPTIONS, async ($, on) => {
   expect(block).toContain("Template: none (`Templates/session.md` absent): use the skill's default format.")
   expect(block).toContain('Error logs:\n- `AI/logs/pyxis-errors.log` (1 lines): bad repos')
   expect(block).not.toContain('Hubs:')
+  expect(block).not.toContain('Wiki:')
+  expect(block).not.toContain('Missing')
   expect(block).not.toContain("This session's hubs:")
   expect(block).not.toContain('parcels.md')
 })
@@ -194,4 +200,95 @@ test('notes behind symbolic links count as the ones they lead to', OPTIONS, asyn
   await $.prompt.submit({ text: '/pyxis:passation' })
 
   expect(facts(fake)).toContain('no-repo/shared.md` (20 days ago): kept elsewhere')
+})
+
+const WIKI = `${HOME}/notes/wiki`
+/** The plugin's root is whatever the engine says: the scripts are its `wiki` folder. */
+const WIKI_LINE = new RegExp(`^Wiki: \`${WIKI}\`, scripts \`[^\`]*/wiki\`\\.$`, 'm')
+const WIKI_OPTIONS = { options: { vault: VAULT, wiki: WIKI } }
+const WIKI_NOTES: Notes = { ...NOTES, [`${WIKI}/index.md`]: 'x' }
+const WIKI_FACTS: SkillFacts = { ...FACTS, skill: 'ingest', wiki: { path: WIKI, scripts: '/plugins/pyxis/wiki' }, template: null, lists: [] }
+
+test('factsBlock: the wiki line, for the skills that work on a wiki', () => {
+  const line = `Wiki: \`${WIKI}\`, scripts \`/plugins/pyxis/wiki\`.`
+  for (const skill of ['ingest', 'lint', 'graph', 'wrapup'] as const) {
+    expect(factsBlock({ ...WIKI_FACTS, skill })).toContain(line)
+  }
+  expect(factsBlock({ ...FACTS, skill: 'ingest', template: null })).not.toContain('Wiki:')
+})
+
+test('factsBlock: no wiki line for passation, even with a wiki set', () => {
+  expect(factsBlock({ ...WIKI_FACTS, skill: 'passation' })).not.toContain('Wiki:')
+})
+
+test('factsBlock: a wiki skill has no template line', () => {
+  expect(factsBlock(WIKI_FACTS)).not.toContain('Template:')
+  expect(factsBlock({ ...WIKI_FACTS, skill: 'wrapup' })).toContain('Template:')
+})
+
+test('factsBlock: no wiki is said once, without a path', () => {
+  const block = factsBlock({ ...FACTS, skill: 'lint', template: null, missing: [{ role: 'wiki', path: null }], lists: [] })
+  expect(block).toContain('Missing: the wiki option is not set or its folder is absent: say so in one line and stop.')
+  expect(block).not.toContain('Wiki:')
+})
+
+for (const skill of ['ingest', 'lint', 'graph'] as const) {
+  test(`${skill}: the wiki and its scripts`, WIKI_OPTIONS, async ($, on) => {
+    const fake = fakeEngine(on, WIKI_NOTES, {}, GIT)
+    await $.prompt.submit({ text: `/pyxis:${skill}` })
+
+    const block = facts(fake)
+    expect(block).toContain(`pyxis, for \`/pyxis:${skill}\``)
+    expect(block).toMatch(WIKI_LINE)
+    expect(block).not.toContain('Missing')
+    expect(block).not.toContain('Template:')
+  })
+
+  test(`${skill}: without the wiki option, one Missing line and nothing else to work from`, OPTIONS, async ($, on) => {
+    const fake = fakeEngine(on, WIKI_NOTES, {}, GIT)
+    await $.prompt.submit({ text: `/pyxis:${skill}` })
+
+    const block = facts(fake)
+    expect(block).toContain('Missing: the wiki option is not set or its folder is absent: say so in one line and stop.')
+    expect(block).not.toContain('Wiki:')
+    expect(block).not.toContain('Graph file')
+  })
+}
+
+test('a wiki set but absent from disk: the same Missing line', WIKI_OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:ingest' })
+
+  expect(facts(fake)).toContain('Missing: the wiki option is not set or its folder is absent: say so in one line and stop.')
+})
+
+test('graph: the file goes in the notes folder', WIKI_OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, WIKI_NOTES, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:graph file' })
+
+  expect(facts(fake)).toContain(`Graph file:\n- \`${V}/wiki-graph.html\``)
+})
+
+test('wrapup with a wiki: the Wiki line, no Missing', WIKI_OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, WIKI_NOTES, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
+
+  expect(facts(fake)).toMatch(WIKI_LINE)
+  expect(facts(fake)).not.toContain('Missing')
+})
+
+test('passation with a wiki: no Wiki line', WIKI_OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, WIKI_NOTES, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:passation' })
+
+  expect(facts(fake)).toContain('pyxis, for `/pyxis:passation`')
+  expect(facts(fake)).not.toContain('Wiki:')
+})
+
+test('wrapup with a wiki set but absent from disk: no Wiki line, no Missing', WIKI_OPTIONS, async ($, on) => {
+  const fake = fakeEngine(on, NOTES, {}, GIT)
+  await $.prompt.submit({ text: '/pyxis:wrapup' })
+
+  expect(facts(fake)).not.toContain('Wiki:')
+  expect(facts(fake)).not.toContain('Missing')
 })

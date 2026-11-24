@@ -1,6 +1,7 @@
 // The facts block that goes with a `/pyxis:<skill>` message: the vault, the date, the folders
 // the conventions resolve, the skill's template and the lists it works from. The skills read
-// this text, so it is fixed: change a line here and the SKILL.md files that name it with it.
+// this text, so it is fixed: change a line here and the SKILL.md files that name it with it
+// (`Wiki:`, `Missing:`, `Graph file:`, `Template:` and the lists are named by the SKILL.md files).
 import type { EngineInterface } from 'claude-code'
 
 import { ROLES, folder, onDisk } from './conventions'
@@ -11,7 +12,7 @@ import { errorLogs } from './logs'
 import { currentMemory } from './memory'
 import { openPassations, passationsDir } from './passations'
 
-export const SKILLS = ['wrapup', 'passation'] as const
+export const SKILLS = ['wrapup', 'passation', 'ingest', 'lint', 'graph'] as const
 
 export type Skill = (typeof SKILLS)[number]
 
@@ -25,6 +26,8 @@ export type SkillFacts = {
   sessionId: string
   /** Set and on disk, relative to the vault. */
   folders: { role: string; path: string }[]
+  /** The wiki folder and the folder of its scripts; null without the wiki option or when its folder is absent. */
+  wiki: { path: string; scripts: string } | null
   /** null: the vault has no templates folder. */
   template: { path: string; isPresent: boolean } | null
   /** The roles the skill needs and the vault lacks; `path` is where it is expected, null when turned off. */
@@ -33,25 +36,34 @@ export type SkillFacts = {
   lists: { title: string; lines: string[] }[]
 }
 
-type Needed = Role | 'passations'
+type Needed = Role | 'passations' | 'wiki'
 
 /** The folders a skill cannot work without. */
 const REQUIRED: Record<Skill, Needed[]> = {
   wrapup: ['sessions'],
   passation: ['passations'],
+  ingest: ['wiki'],
+  lint: ['wiki'],
+  graph: ['wiki'],
 }
 
-/** The template a skill follows, a file of the templates folder. */
-const TEMPLATE: Record<Skill, string> = {
+/** The skills that read the wiki's path and scripts. */
+const WIKI_SKILLS: Skill[] = ['ingest', 'lint', 'graph', 'wrapup']
+
+/** The template a skill follows, a file of the templates folder; the skills without one are not listed. */
+const TEMPLATE: Partial<Record<Skill, string>> = {
   wrapup: 'session.md',
   passation: 'passation.md',
 }
 
-type ListTitle = 'Error logs' | 'Write it in' | 'Open passations there'
+type ListTitle = 'Error logs' | 'Write it in' | 'Open passations there' | 'Graph file'
 
 const LISTS: Record<Skill, ListTitle[]> = {
   wrapup: ['Error logs'],
   passation: ['Write it in', 'Open passations there'],
+  ingest: [],
+  lint: [],
+  graph: ['Graph file'],
 }
 
 /** A list shows this many lines, then how many more. */
@@ -87,12 +99,19 @@ function listText(list: { title: string; lines: string[] }): string[] {
 const CONFIG = '`.claude/pyxis.json`'
 
 function missingLine({ role, path }: SkillFacts['missing'][number]): string {
+  if (role === 'wiki') {
+    return 'Missing: the wiki option is not set or its folder is absent: say so in one line and stop.'
+  }
+
   return path === null
     ? `Missing: the ${role} folder is turned off in ${CONFIG}: say so in one line and stop.`
     : `Missing: the ${role} folder (\`${path}\`) is absent: create it or change it in ${CONFIG}; say so in one line and stop.`
 }
 
-function templateLine(f: SkillFacts): string {
+function templateLine(f: SkillFacts): string | null {
+  if (TEMPLATE[f.skill] === undefined) {
+    return null
+  }
   if (f.template === null) {
     return "Template: none: use the skill's default format."
   }
@@ -110,9 +129,12 @@ export function factsBlock(f: SkillFacts): string {
     `pyxis, for \`/pyxis:${f.skill}\`: vault \`${f.vault}\`, today ${f.weekday} ${f.today}, session id \`${f.sessionId}\`.`,
     `Folders, relative to the vault: ${folders}.`,
     templateLine(f),
+    ...(f.wiki === null || !WIKI_SKILLS.includes(f.skill) ? [] : [`Wiki: \`${f.wiki.path}\`, scripts \`${f.wiki.scripts}\`.`]),
     ...f.missing.map(missingLine),
     ...f.lists.flatMap(listText),
-  ].join('\n')
+  ]
+    .filter(line => line !== null)
+    .join('\n')
 }
 
 /** What the lists are built from. */
@@ -151,13 +173,27 @@ async function listLines($: EngineInterface, c: Context, title: ListTitle): Prom
     }
     case 'Open passations there':
       return openLines($, c)
+    case 'Graph file':
+      return [`\`${c.kit.vault}/wiki-graph.html\``]
   }
 }
 
 /** The roles the skill needs that the vault turns off or lacks, with the path the conventions expect. */
 function missingRoles(skill: Skill, kit: Kit, disk: Kit): SkillFacts['missing'] {
-  const isOff = (role: Needed) => (role === 'passations' ? disk.passations.folder === null : disk.folders[role] === null)
-  const expected = (role: Needed) => (role === 'passations' ? kit.passations.folder : kit.folders[role])
+  const isOff = (role: Needed) => {
+    if (role === 'wiki') {
+      return !kit.isWikiFound
+    }
+
+    return role === 'passations' ? disk.passations.folder === null : disk.folders[role] === null
+  }
+  const expected = (role: Needed) => {
+    if (role === 'wiki') {
+      return kit.wiki || null
+    }
+
+    return role === 'passations' ? kit.passations.folder : kit.folders[role]
+  }
 
   return REQUIRED[skill].filter(isOff).map(role => ({ role, path: expected(role) }))
 }
@@ -185,7 +221,7 @@ export async function skillFacts($: EngineInterface, kit: Kit, skill: Skill, cwd
   }
 
   let template: SkillFacts['template'] = null
-  if (disk.folders.templates !== null) {
+  if (disk.folders.templates !== null && TEMPLATE[skill] !== undefined) {
     const path = `${disk.folders.templates}/${TEMPLATE[skill]}`
     template = { path, isPresent: (await $.fs.stat(`${kit.vault}/${path}`).catch(() => null))?.kind === 'file' }
   }
@@ -199,5 +235,7 @@ export async function skillFacts($: EngineInterface, kit: Kit, skill: Skill, cwd
     }
   }
 
-  return { skill, vault: kit.vault, today, weekday, sessionId: memory.id, folders, template, missing, lists }
+  const wiki = kit.isWikiFound ? { path: kit.wiki, scripts: `${$.plugin.root}/wiki` } : null
+
+  return { skill, vault: kit.vault, today, weekday, sessionId: memory.id, folders, wiki, template, missing, lists }
 }
